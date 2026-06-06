@@ -187,6 +187,7 @@ export default function NewBotPage() {
                 <label className="label" htmlFor="karotter-username">KarotterユーザーID</label>
                 <input id="karotter-username" type="text" className="input-field" placeholder="例: yudetamagobot"
                   value={karotterUsername} onChange={e => setKarotterUsername(e.target.value)} required />
+                <p className="label-hint">※ @ は不要です（例: karobot_user）</p>
               </div>
               <div className="form-group">
                 <label className="label" htmlFor="karotter-password">Karotterパスワード</label>

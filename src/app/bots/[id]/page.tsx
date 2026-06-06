@@ -171,6 +171,7 @@ export default function BotDetailPage({ params }: { params: Promise<{ id: string
               <div className="form-group">
                 <label className="label">KarotterユーザーID</label>
                 <input type="text" className="input-field" value={karotterUsername} onChange={e => setKarotterUsername(e.target.value)} required />
+                <p className="label-hint">※ @ は不要です（例: karobot_user）</p>
               </div>
               <div className="form-group">
                 <label className="label">Karotterパスワード（変更する場合のみ）</label>

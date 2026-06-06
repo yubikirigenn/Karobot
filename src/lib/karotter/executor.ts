@@ -52,16 +52,18 @@ export async function executeBotCycle(botId: string): Promise<{ actions: string[
 
   // トークンがなければログイン
   if (!bot.accessToken) {
-    const token = await client.login();
-    if (!token) {
-      errors.push('Karotterログインに失敗しました');
-      await logAction(botId, 'ERROR', 'ログイン失敗', false);
+    try {
+      const token = await client.login();
+      await prisma.bot.update({
+        where: { id: botId },
+        data: { accessToken: token, tokenExpiresAt: new Date(Date.now() + 300000) },
+      });
+    } catch (e) {
+      const errorMsg = e instanceof Error ? e.message : String(e);
+      errors.push(`Karotterログインに失敗しました: ${errorMsg}`);
+      await logAction(botId, 'ERROR', `ログイン失敗: ${errorMsg}`, false);
       return { actions, errors };
     }
-    await prisma.bot.update({
-      where: { id: botId },
-      data: { accessToken: token, tokenExpiresAt: new Date(Date.now() + 300000) },
-    });
   }
 
   // AIプロバイダーを初期化

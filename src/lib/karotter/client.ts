@@ -25,15 +25,16 @@ export class KarotterClient {
   }
 
   /** ログインしてアクセストークンを取得 */
-  async login(): Promise<string | null> {
+  async login(): Promise<string> {
     const payload = {
       identifier: this.username,
       password: this.password,
       gender: 'other',
     };
 
+    let res: Response;
     try {
-      const res = await fetch(`${KAROTTER_INTERNAL_URL}/auth/login`, {
+      res = await fetch(`${KAROTTER_INTERNAL_URL}/auth/login`, {
         method: 'POST',
         headers: { 
           'Content-Type': 'application/json',
@@ -42,18 +43,18 @@ export class KarotterClient {
         body: JSON.stringify(payload),
         signal: AbortSignal.timeout(15000),
       });
-
-      if (res.ok) {
-        const data = await res.json();
-        this.accessToken = data.accessToken;
-        return this.accessToken;
-      }
-
-      console.error(`⚠️ ログインエラー: ${res.status}`);
     } catch (e) {
-      console.error(`⚠️ ログインエラー: ${e}`);
+      throw new Error(`ネットワークエラー: ${e}`);
     }
-    return null;
+
+    if (!res.ok) {
+      const errorText = await res.text();
+      throw new Error(`HTTP ${res.status} - ${errorText}`);
+    }
+
+    const data = await res.json();
+    this.accessToken = data.accessToken;
+    return this.accessToken!;
   }
 
   /** 現在のアクセストークンを取得 */

@@ -19,7 +19,7 @@ import type { BotFeatures, Probabilities } from '@/types';
 /**
  * 指定されたBotの1サイクル分の処理を実行
  */
-export async function executeBotCycle(botId: string): Promise<{ actions: string[]; errors: string[] }> {
+export async function executeBotCycle(botId: string, forceAutoPost: boolean = false): Promise<{ actions: string[]; errors: string[] }> {
   const actions: string[] = [];
   const errors: string[] = [];
 
@@ -124,6 +124,10 @@ export async function executeBotCycle(botId: string): Promise<{ actions: string[
     } else {
       // DYNAMIC_PACE
       shouldAutoPost = !bot.lastAutoPostAt || diffSec > bot.autoPostMinInterval;
+    }
+
+    if (forceAutoPost) {
+      shouldAutoPost = true;
     }
 
     if (shouldAutoPost) {

@@ -20,7 +20,7 @@ export async function POST(
       return NextResponse.json({ error: 'Botが見つかりません' }, { status: 404 });
     }
 
-    const result = await executeBotCycle(id);
+    const result = await executeBotCycle(id, true);
 
     return NextResponse.json({
       success: result.errors.length === 0,

@@ -273,7 +273,7 @@ async function executeNotifications(ctx: BotContext): Promise<void> {
       // メンション・リプライ・引用への返信
       if (['mention', 'reply', 'quote'].includes(classified.type)) {
         // メンション反応がOFFの場合はスキップ
-        if (!features.mentionReaction) {
+        if (features.mentionReaction === false) {
           await markSeen(botId, classified.postId, 'SEEN');
           continue;
         }

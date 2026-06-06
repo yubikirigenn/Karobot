@@ -10,11 +10,12 @@ import { executeBotCycle } from '@/lib/karotter/executor';
 export const dynamic = 'force-dynamic';
 
 export async function POST(request: NextRequest) {
-  // Cron Secretで認証
+  // Cron Secretで認証 (Header または Query Param)
   const authHeader = request.headers.get('authorization');
+  const querySecret = request.nextUrl.searchParams.get('secret');
   const cronSecret = process.env.CRON_SECRET;
 
-  if (!cronSecret || authHeader !== `Bearer ${cronSecret}`) {
+  if (!cronSecret || (authHeader !== `Bearer ${cronSecret}` && querySecret !== cronSecret)) {
     return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
   }
 
@@ -58,7 +59,6 @@ export async function POST(request: NextRequest) {
   }
 }
 
-// GETも受け付ける（cron-job.orgの設定によってはGETになる場合がある）
 export async function GET(request: NextRequest) {
   return POST(request);
 }

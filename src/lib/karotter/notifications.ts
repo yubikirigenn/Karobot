@@ -45,8 +45,9 @@ export function classifyNotification(
   const mediaUrls = post.mediaUrls || [];
 
   const authorData = post.author || post.user || {};
-  const authorUsername = String(authorData.username || 'unknown');
-  const authorId = String(authorData.id || notification.actorId || notification.actor?.id || notification.user?.id || '');
+  const actorData = notification.actor || notification.user || notification.account || {};
+  const authorUsername = String(authorData.username || actorData.username || 'unknown');
+  const authorId = String(authorData.id || actorData.id || notification.actorId || '');
 
   // いいね・リアクション・ブックマーク → 無視
   if (['LIKE', 'REACTION', 'BOOKMARK'].includes(notifType)) {

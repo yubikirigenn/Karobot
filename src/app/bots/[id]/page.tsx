@@ -39,7 +39,7 @@ export default function BotDetailPage({ params }: { params: Promise<{ id: string
 
   const fetchBot = useCallback(async () => {
     try {
-      const res = await fetch(`/api/bots/${id}`);
+      const res = await fetch(`/api/bots/${id}`, { cache: 'no-store' });
       if (!res.ok) { router.push('/dashboard'); return; }
       const { bot } = await res.json();
       setName(bot.name);

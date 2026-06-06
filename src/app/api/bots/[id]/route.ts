@@ -9,6 +9,8 @@ import { requireAuth } from '@/lib/auth';
 import { prisma } from '@/lib/prisma';
 import { encrypt } from '@/lib/encryption';
 
+export const dynamic = 'force-dynamic';
+
 async function getBotWithAuth(botId: string) {
   const user = await requireAuth();
   const bot = await prisma.bot.findUnique({ where: { id: botId } });

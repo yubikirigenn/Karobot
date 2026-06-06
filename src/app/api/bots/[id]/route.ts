@@ -68,7 +68,11 @@ export async function PUT(
 
     for (const field of simpleFields) {
       if (body[field] !== undefined) {
-        updateData[field] = body[field];
+        if (field === 'karotterUsername' && typeof body[field] === 'string') {
+          updateData[field] = body[field].replace(/^@/, '');
+        } else {
+          updateData[field] = body[field];
+        }
       }
     }
 

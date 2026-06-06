@@ -1,0 +1,156 @@
+// KaroBot Manager — Prisma Schema
+// Database: Supabase PostgreSQL
+
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+}
+
+// ==========================================
+// User — サイトユーザー (Supabase Auth と同期)
+// ==========================================
+model User {
+  id        String   @id @default(cuid())
+  authId    String   @unique // Supabase Auth UID
+  email     String   @unique
+  name      String?
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+  bots      Bot[]
+
+  @@map("users")
+}
+
+// ==========================================
+// Bot — Bot設定
+// ==========================================
+model Bot {
+  id                     String    @id @default(cuid())
+  userId                 String
+  user                   User      @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  // 基本設定
+  name                   String
+  karotterUsername        String
+  karotterPasswordEnc    String    // AES-256-GCM 暗号化
+
+  // 投稿モード
+  postMode               PostMode  @default(AI)
+
+  // AI設定
+  aiProvider             AiProvider @default(NONE)
+  aiApiKeyEnc            String?   // AES-256-GCM 暗号化
+  aiModel                String    @default("gemini-3.1-flash-lite")
+  systemInstruction      String    @default("") @db.Text
+
+  // テンプレート設定 (非AIモード用)
+  postTemplates          Json      @default("[]")   // string[]
+  replyTemplates         Json      @default("[]")   // string[]
+  templateIndex          Int       @default(0)
+
+  // 確率コントロール
+  probabilities          Json      @default("{\"like\":0.02,\"rekarot\":0.00,\"quote\":0.025,\"reply\":0.03,\"react\":0.03}")
+
+  // 機能ON/OFFフラグ
+  features               Json      @default("{\"autoPost\":true,\"like\":true,\"rekarot\":false,\"quoteRekarot\":true,\"reply\":true,\"reaction\":true,\"followBack\":true,\"notificationReply\":true,\"selfLearning\":true}")
+
+  // ブロックリスト
+  blockedUsers           Json      @default("[]")   // string[]
+
+  // 投稿間隔設定
+  autoPostMinInterval    Int       @default(30)
+  autoPostPaceMultiplier Float     @default(4.7)
+  autoPostMaxInterval    Int       @default(3600)
+
+  // 稼働状態
+  status                 BotStatus @default(PAUSED)
+  lastExecutedAt         DateTime?
+  lastAutoPostAt         DateTime?
+
+  // Karotterトークンキャッシュ
+  accessToken            String?
+  tokenExpiresAt         DateTime?
+
+  // AI自己学習・メモリ
+  threadMemory           Json      @default("{}")
+  botKnowledge           Json      @default("[]")
+  recentPosts            Json      @default("[]")   // 直近の投稿履歴
+
+  createdAt              DateTime  @default(now())
+  updatedAt              DateTime  @updatedAt
+
+  logs                   BotLog[]
+  seenPosts              SeenPost[]
+
+  @@index([userId])
+  @@index([status])
+  @@map("bots")
+}
+
+// ==========================================
+// BotLog — 実行ログ
+// ==========================================
+model BotLog {
+  id           String   @id @default(cuid())
+  botId        String
+  bot          Bot      @relation(fields: [botId], references: [id], onDelete: Cascade)
+
+  action       String   // POST, LIKE, REPLY, REKAROT, QUOTE, REACT, FOLLOW, ERROR
+  detail       String   @db.Text
+  targetPostId String?
+  resultPostId String?
+  success      Boolean  @default(true)
+
+  createdAt    DateTime @default(now())
+
+  @@index([botId, createdAt(sort: Desc)])
+  @@map("bot_logs")
+}
+
+// ==========================================
+// SeenPost — 処理済み投稿トラッキング
+// ==========================================
+model SeenPost {
+  id        String       @id @default(cuid())
+  botId     String
+  bot       Bot          @relation(fields: [botId], references: [id], onDelete: Cascade)
+
+  postId    String       // Karotter の投稿ID
+  type      SeenPostType @default(SEEN)
+
+  createdAt DateTime     @default(now())
+
+  @@unique([botId, postId])
+  @@index([botId])
+  @@map("seen_posts")
+}
+
+// ==========================================
+// Enums
+// ==========================================
+enum PostMode {
+  AI
+  FIXED_TEMPLATE
+  RANDOM_TEMPLATE
+}
+
+enum AiProvider {
+  GEMINI
+  GROQ_QWEN
+  DEEPSEEK
+  OPENAI_GPT
+  NONE
+}
+
+enum BotStatus {
+  ACTIVE
+  PAUSED
+}
+
+enum SeenPostType {
+  SEEN
+  AI_POSTED
+}

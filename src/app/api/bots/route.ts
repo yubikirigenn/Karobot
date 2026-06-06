@@ -53,7 +53,7 @@ export async function POST(request: NextRequest) {
       data: {
         userId: user.id,
         name: body.name,
-        karotterUsername: body.karotterUsername.replace(/^@/, ''),
+        karotterUsername: body.karotterUsername.trim().replace(/^@/, ''),
         karotterPasswordEnc,
         postMode: body.postMode || 'AI',
         aiProvider: body.aiProvider || 'NONE',

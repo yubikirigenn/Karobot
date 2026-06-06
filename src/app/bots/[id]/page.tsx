@@ -20,10 +20,10 @@ export default function BotDetailPage({ params }: { params: Promise<{ id: string
   const [postMode, setPostMode] = useState<PostMode>('AI');
   const [aiProvider, setAiProvider] = useState<AiProviderType>('GEMINI');
   const [aiApiKey, setAiApiKey] = useState('');
-  const [aiModel, setAiModel] = useState('');
+  const [aiModel, setAiModel] = useState('gemini-3.1-flash-lite');
   const [systemInstruction, setSystemInstruction] = useState('');
-  const [postTemplatesText, setPostTemplatesText] = useState('');
-  const [replyTemplatesText, setReplyTemplatesText] = useState('');
+  const [postTemplates, setPostTemplates] = useState<string[]>(['']);
+  const [replyTemplates, setReplyTemplates] = useState<string[]>(['']);
   const [probs, setProbs] = useState<Probabilities>({ like: 0.02, rekarot: 0, quote: 0.025, reply: 0.03, react: 0.03 });
   const [features, setFeatures] = useState<BotFeatures>({
     autoPost: true, like: true, rekarot: false, quoteRekarot: true,
@@ -48,8 +48,8 @@ export default function BotDetailPage({ params }: { params: Promise<{ id: string
       setAiProvider(bot.aiProvider);
       setAiModel(bot.aiModel);
       setSystemInstruction(bot.systemInstruction || '');
-      setPostTemplatesText((bot.postTemplates || []).join('\n'));
-      setReplyTemplatesText((bot.replyTemplates || []).join('\n'));
+      setPostTemplates(bot.postTemplates?.length > 0 ? bot.postTemplates : ['']);
+      setReplyTemplates(bot.replyTemplates?.length > 0 ? bot.replyTemplates : ['']);
       setProbs(bot.probabilities || probs);
       setFeatures(bot.features || features);
       setAutoPostMode(bot.autoPostMode || 'DYNAMIC_PACE');
@@ -74,8 +74,8 @@ export default function BotDetailPage({ params }: { params: Promise<{ id: string
         name, karotterUsername, postMode,
         aiProvider: postMode === 'AI' ? aiProvider : 'NONE',
         aiModel, systemInstruction,
-        postTemplates: postTemplatesText.split('\n').filter(Boolean),
-        replyTemplates: replyTemplatesText.split('\n').filter(Boolean),
+        postTemplates: postTemplates.filter(t => t.trim() !== ''),
+        replyTemplates: replyTemplates.filter(t => t.trim() !== ''),
         probabilities: probs, features,
         blockedUsers: blockedUsersText.split(',').map(s => s.trim()).filter(Boolean),
         autoPostMinInterval: minInterval, autoPostPaceMultiplier: paceMultiplier, autoPostMaxInterval: maxInterval,
@@ -237,12 +237,52 @@ export default function BotDetailPage({ params }: { params: Promise<{ id: string
               {postMode !== 'AI' && (
                 <div style={{ borderTop: '1px solid var(--color-border)', paddingTop: '20px' }}>
                   <div className="form-group">
-                    <label className="label">投稿テンプレート（1行に1つ）</label>
-                    <textarea className="input-field" rows={5} value={postTemplatesText} onChange={e => setPostTemplatesText(e.target.value)} />
+                    <label className="label">投稿テンプレート</label>
+                    <div style={{ display: 'flex', flexDirection: 'column', gap: '8px' }}>
+                      {postTemplates.map((t, i) => (
+                        <div key={i} style={{ display: 'flex', gap: '8px', alignItems: 'flex-start' }}>
+                          <textarea className="input-field" rows={3} value={t} style={{ flex: 1 }}
+                            placeholder="投稿内容を入力..."
+                            onChange={e => {
+                              const newTemplates = [...postTemplates];
+                              newTemplates[i] = e.target.value;
+                              setPostTemplates(newTemplates);
+                            }} />
+                          <button type="button" className="btn btn-ghost" style={{ padding: '8px', color: 'var(--color-error)' }}
+                            onClick={() => setPostTemplates(postTemplates.filter((_, idx) => idx !== i))}>
+                            ✖
+                          </button>
+                        </div>
+                      ))}
+                      <button type="button" className="btn btn-outline" style={{ alignSelf: 'flex-start', marginTop: '4px' }}
+                        onClick={() => setPostTemplates([...postTemplates, ''])}>
+                        ＋ 投稿テンプレートを追加
+                      </button>
+                    </div>
                   </div>
                   <div className="form-group">
-                    <label className="label">リプライテンプレート（1行に1つ）</label>
-                    <textarea className="input-field" rows={3} value={replyTemplatesText} onChange={e => setReplyTemplatesText(e.target.value)} />
+                    <label className="label">リプライテンプレート</label>
+                    <div style={{ display: 'flex', flexDirection: 'column', gap: '8px' }}>
+                      {replyTemplates.map((t, i) => (
+                        <div key={i} style={{ display: 'flex', gap: '8px', alignItems: 'flex-start' }}>
+                          <textarea className="input-field" rows={2} value={t} style={{ flex: 1 }}
+                            placeholder="リプライ内容を入力..."
+                            onChange={e => {
+                              const newTemplates = [...replyTemplates];
+                              newTemplates[i] = e.target.value;
+                              setReplyTemplates(newTemplates);
+                            }} />
+                          <button type="button" className="btn btn-ghost" style={{ padding: '8px', color: 'var(--color-error)' }}
+                            onClick={() => setReplyTemplates(replyTemplates.filter((_, idx) => idx !== i))}>
+                            ✖
+                          </button>
+                        </div>
+                      ))}
+                      <button type="button" className="btn btn-outline" style={{ alignSelf: 'flex-start', marginTop: '4px' }}
+                        onClick={() => setReplyTemplates([...replyTemplates, ''])}>
+                        ＋ リプライテンプレートを追加
+                      </button>
+                    </div>
                   </div>
                 </div>
               )}

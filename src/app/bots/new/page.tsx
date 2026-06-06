@@ -31,8 +31,8 @@ export default function NewBotPage() {
   const [systemInstruction, setSystemInstruction] = useState(DEFAULT_SYSTEM_INSTRUCTION);
 
   // テンプレート
-  const [postTemplatesText, setPostTemplatesText] = useState('');
-  const [replyTemplatesText, setReplyTemplatesText] = useState('');
+  const [postTemplates, setPostTemplates] = useState<string[]>(['']);
+  const [replyTemplates, setReplyTemplates] = useState<string[]>(['']);
 
   // 確率
   const [probs, setProbs] = useState<Probabilities>(defaultProbs);
@@ -63,8 +63,6 @@ export default function NewBotPage() {
     setLoading(true);
 
     try {
-      const postTemplates = postTemplatesText.split('\n').map(s => s.trim()).filter(Boolean);
-      const replyTemplates = replyTemplatesText.split('\n').map(s => s.trim()).filter(Boolean);
       const blockedUsers = blockedUsersText.split(',').map(s => s.trim()).filter(Boolean);
 
       const body = {
@@ -76,8 +74,8 @@ export default function NewBotPage() {
         aiApiKey: postMode === 'AI' ? aiApiKey : undefined,
         aiModel: postMode === 'AI' ? aiModel : undefined,
         systemInstruction: postMode === 'AI' ? systemInstruction : '',
-        postTemplates,
-        replyTemplates,
+        postTemplates: postTemplates.filter(t => t.trim() !== ''),
+        replyTemplates: replyTemplates.filter(t => t.trim() !== ''),
         probabilities: probs,
         features,
         blockedUsers,
@@ -271,17 +269,52 @@ export default function NewBotPage() {
               {postMode !== 'AI' && (
                 <div style={{ borderTop: '1px solid var(--color-border)', paddingTop: '20px' }}>
                   <div className="form-group">
-                    <label className="label" htmlFor="post-templates">投稿テンプレート（1行に1つ）</label>
-                    <textarea id="post-templates" className="input-field" rows={6}
-                      placeholder={`おはよう！今日も頑張ろう\n眠い...\n{{time}}だ、{{random:お腹すいた,コーヒー飲みたい}}`}
-                      value={postTemplatesText} onChange={e => setPostTemplatesText(e.target.value)} />
-                    <p className="label-hint">変数: {'{{time}}'}, {'{{date}}'}, {'{{weekday}}'}, {'{{random:A,B,C}}'}</p>
+                    <label className="label">投稿テンプレート</label>
+                    <div style={{ display: 'flex', flexDirection: 'column', gap: '8px' }}>
+                      {postTemplates.map((t, i) => (
+                        <div key={i} style={{ display: 'flex', gap: '8px', alignItems: 'flex-start' }}>
+                          <textarea className="input-field" rows={3} value={t} style={{ flex: 1 }}
+                            placeholder="投稿内容を入力..."
+                            onChange={e => {
+                              const newTemplates = [...postTemplates];
+                              newTemplates[i] = e.target.value;
+                              setPostTemplates(newTemplates);
+                            }} />
+                          <button type="button" className="btn btn-ghost" style={{ padding: '8px', color: 'var(--color-error)' }}
+                            onClick={() => setPostTemplates(postTemplates.filter((_, idx) => idx !== i))}>
+                            ✖
+                          </button>
+                        </div>
+                      ))}
+                      <button type="button" className="btn btn-outline" style={{ alignSelf: 'flex-start', marginTop: '4px' }}
+                        onClick={() => setPostTemplates([...postTemplates, ''])}>
+                        ＋ 投稿テンプレートを追加
+                      </button>
+                    </div>
                   </div>
                   <div className="form-group">
-                    <label className="label" htmlFor="reply-templates">リプライテンプレート（1行に1つ）</label>
-                    <textarea id="reply-templates" className="input-field" rows={4}
-                      placeholder={`ありがとう！\nわかる\nいいね！`}
-                      value={replyTemplatesText} onChange={e => setReplyTemplatesText(e.target.value)} />
+                    <label className="label">リプライテンプレート</label>
+                    <div style={{ display: 'flex', flexDirection: 'column', gap: '8px' }}>
+                      {replyTemplates.map((t, i) => (
+                        <div key={i} style={{ display: 'flex', gap: '8px', alignItems: 'flex-start' }}>
+                          <textarea className="input-field" rows={2} value={t} style={{ flex: 1 }}
+                            placeholder="リプライ内容を入力..."
+                            onChange={e => {
+                              const newTemplates = [...replyTemplates];
+                              newTemplates[i] = e.target.value;
+                              setReplyTemplates(newTemplates);
+                            }} />
+                          <button type="button" className="btn btn-ghost" style={{ padding: '8px', color: 'var(--color-error)' }}
+                            onClick={() => setReplyTemplates(replyTemplates.filter((_, idx) => idx !== i))}>
+                            ✖
+                          </button>
+                        </div>
+                      ))}
+                      <button type="button" className="btn btn-outline" style={{ alignSelf: 'flex-start', marginTop: '4px' }}
+                        onClick={() => setReplyTemplates([...replyTemplates, ''])}>
+                        ＋ リプライテンプレートを追加
+                      </button>
+                    </div>
                   </div>
                 </div>
               )}

@@ -45,7 +45,7 @@ export function classifyNotification(
   const mediaUrls = post.mediaUrls || [];
 
   const authorData = post.author || post.user || {};
-  const actorData = notification.actor || notification.user || notification.account || {};
+  const actorData = notification.actor || notification.user || (notification as any).account || {};
   const authorUsername = String(authorData.username || actorData.username || 'unknown');
   const authorId = String(authorData.id || actorData.id || notification.actorId || '');
 

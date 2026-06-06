@@ -10,7 +10,7 @@ import { DEFAULT_SYSTEM_INSTRUCTION } from '@/lib/ai/prompts';
 const defaultProbs: Probabilities = { like: 0.02, rekarot: 0, quote: 0.025, reply: 0.03, react: 0.03 };
 const defaultFeatures: BotFeatures = {
   autoPost: true, like: true, rekarot: false, quoteRekarot: true,
-  reply: true, reaction: true, followBack: true, notificationReply: true, selfLearning: true,
+  reply: true, reaction: true, followBack: true, notificationReply: true, mentionReaction: true, selfLearning: true,
 };
 
 export default function NewBotPage() {
@@ -33,6 +33,10 @@ export default function NewBotPage() {
   // テンプレート
   const [postTemplates, setPostTemplates] = useState<string[]>(['']);
   const [replyTemplates, setReplyTemplates] = useState<string[]>(['']);
+
+  // メンション反応設定
+  const [mentionSystemInstruction, setMentionSystemInstruction] = useState('');
+  const [mentionReplyTemplates, setMentionReplyTemplates] = useState<string[]>(['']);
 
   // 確率
   const [probs, setProbs] = useState<Probabilities>(defaultProbs);
@@ -74,6 +78,8 @@ export default function NewBotPage() {
         aiApiKey: postMode === 'AI' ? aiApiKey : undefined,
         aiModel: postMode === 'AI' ? aiModel : undefined,
         systemInstruction: postMode === 'AI' ? systemInstruction : '',
+        mentionSystemInstruction: postMode === 'AI' ? mentionSystemInstruction : '',
+        mentionReplyTemplates: mentionReplyTemplates.filter(t => t.trim() !== ''),
         postTemplates: postTemplates.filter(t => t.trim() !== ''),
         replyTemplates: replyTemplates.filter(t => t.trim() !== ''),
         probabilities: probs,
@@ -335,8 +341,58 @@ export default function NewBotPage() {
                 {featureToggle('リアクション', 'reaction')}
                 {featureToggle('フォローバック', 'followBack')}
                 {featureToggle('通知自動返信', 'notificationReply')}
+                {featureToggle('メンション反応', 'mentionReaction')}
                 {featureToggle('AI自己学習', 'selfLearning')}
               </div>
+
+              {/* メンション反応の詳細設定 */}
+              {features.mentionReaction && (
+                <div style={{ marginTop: '16px', padding: '16px', borderRadius: '10px', background: 'rgba(99, 102, 241, 0.08)', border: '1px solid rgba(99, 102, 241, 0.2)' }}>
+                  <h3 style={{ fontSize: '14px', fontWeight: 600, marginBottom: '12px', color: 'var(--color-text-primary)', display: 'flex', alignItems: 'center', gap: '8px' }}>
+                    <span>📡</span> メンション反応設定
+                  </h3>
+                  <p style={{ fontSize: '12px', color: 'var(--color-text-tertiary)', marginBottom: '16px', lineHeight: 1.6 }}>
+                    メンションやリプライを受け取った時の返信に使う設定です。空欄の場合はメインの設定を使用します。
+                  </p>
+
+                  {postMode === 'AI' && (
+                    <div className="form-group">
+                      <label className="label">メンション用キャラクター設定</label>
+                      <textarea className="input-field" rows={5}
+                        placeholder="空欄の場合はメインのキャラクター設定を使用"
+                        value={mentionSystemInstruction}
+                        onChange={e => setMentionSystemInstruction(e.target.value)} />
+                    </div>
+                  )}
+
+                  {postMode !== 'AI' && (
+                    <div className="form-group">
+                      <label className="label">メンション用返信テンプレート</label>
+                      <div style={{ display: 'flex', flexDirection: 'column', gap: '8px' }}>
+                        {mentionReplyTemplates.map((t, i) => (
+                          <div key={i} style={{ display: 'flex', gap: '8px', alignItems: 'flex-start' }}>
+                            <textarea className="input-field" rows={2} value={t} style={{ flex: 1 }}
+                              placeholder="空欄の場合はリプライテンプレートを使用"
+                              onChange={e => {
+                                const newTemplates = [...mentionReplyTemplates];
+                                newTemplates[i] = e.target.value;
+                                setMentionReplyTemplates(newTemplates);
+                              }} />
+                            <button type="button" className="btn btn-ghost" style={{ padding: '8px', color: 'var(--color-error)' }}
+                              onClick={() => setMentionReplyTemplates(mentionReplyTemplates.filter((_, idx) => idx !== i))}>
+                              ✖
+                            </button>
+                          </div>
+                        ))}
+                        <button type="button" className="btn btn-outline" style={{ alignSelf: 'flex-start', marginTop: '4px' }}
+                          onClick={() => setMentionReplyTemplates([...mentionReplyTemplates, ''])}>
+                          ＋ メンション用テンプレートを追加
+                        </button>
+                      </div>
+                    </div>
+                  )}
+                </div>
+              )}
             </div>
           </div>
 

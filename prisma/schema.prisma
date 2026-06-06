@@ -51,6 +51,10 @@ model Bot {
   replyTemplates         Json      @default("[]")   // string[]
   templateIndex          Int       @default(0)
 
+  // メンション反応設定
+  mentionSystemInstruction String  @default("") @db.Text
+  mentionReplyTemplates  Json      @default("[]")   // string[]
+
   // 確率コントロール
   probabilities          Json      @default("{\"like\":0.02,\"rekarot\":0.00,\"quote\":0.025,\"reply\":0.03,\"react\":0.03}")
 

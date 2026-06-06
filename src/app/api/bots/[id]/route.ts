@@ -61,6 +61,7 @@ export async function PUT(
     const simpleFields = [
       'name', 'karotterUsername', 'postMode', 'aiProvider', 'aiModel',
       'systemInstruction', 'postTemplates', 'replyTemplates',
+      'mentionSystemInstruction', 'mentionReplyTemplates',
       'probabilities', 'features', 'blockedUsers',
       'autoPostMinInterval', 'autoPostPaceMultiplier', 'autoPostMaxInterval',
       'autoPostMode', 'fixedIntervalMinutes', 'specificTimes',

@@ -27,7 +27,7 @@ export default function BotDetailPage({ params }: { params: Promise<{ id: string
   const [probs, setProbs] = useState<Probabilities>({ like: 0.02, rekarot: 0, quote: 0.025, reply: 0.03, react: 0.03 });
   const [features, setFeatures] = useState<BotFeatures>({
     autoPost: true, like: true, rekarot: false, quoteRekarot: true,
-    reply: true, reaction: true, followBack: true, notificationReply: true, selfLearning: true,
+    reply: true, reaction: true, followBack: true, notificationReply: true, mentionReaction: true, selfLearning: true,
   });
   const [autoPostMode, setAutoPostMode] = useState<'DYNAMIC_PACE' | 'FIXED_INTERVAL' | 'SPECIFIC_TIMES'>('DYNAMIC_PACE');
   const [fixedIntervalMinutes, setFixedIntervalMinutes] = useState(60);
@@ -36,6 +36,8 @@ export default function BotDetailPage({ params }: { params: Promise<{ id: string
   const [paceMultiplier, setPaceMultiplier] = useState(4.7);
   const [maxInterval, setMaxInterval] = useState(3600);
   const [blockedUsersText, setBlockedUsersText] = useState('');
+  const [mentionSystemInstruction, setMentionSystemInstruction] = useState('');
+  const [mentionReplyTemplates, setMentionReplyTemplates] = useState<string[]>(['']);
 
   const fetchBot = useCallback(async () => {
     try {
@@ -59,6 +61,8 @@ export default function BotDetailPage({ params }: { params: Promise<{ id: string
       setPaceMultiplier(bot.autoPostPaceMultiplier || 4.7);
       setMaxInterval(bot.autoPostMaxInterval || 3600);
       setBlockedUsersText((bot.blockedUsers || []).join(', '));
+      setMentionSystemInstruction(bot.mentionSystemInstruction || '');
+      setMentionReplyTemplates(bot.mentionReplyTemplates?.length > 0 ? bot.mentionReplyTemplates : ['']);
     } catch { router.push('/dashboard'); }
     setLoading(false);
   }, [id, router]); // eslint-disable-line react-hooks/exhaustive-deps
@@ -78,6 +82,8 @@ export default function BotDetailPage({ params }: { params: Promise<{ id: string
         replyTemplates: replyTemplates.filter(t => t.trim() !== ''),
         probabilities: probs, features,
         blockedUsers: blockedUsersText.split(',').map(s => s.trim()).filter(Boolean),
+        mentionSystemInstruction,
+        mentionReplyTemplates: mentionReplyTemplates.filter(t => t.trim() !== ''),
         autoPostMinInterval: minInterval, autoPostPaceMultiplier: paceMultiplier, autoPostMaxInterval: maxInterval,
         autoPostMode, fixedIntervalMinutes, specificTimes,
       };
@@ -302,8 +308,58 @@ export default function BotDetailPage({ params }: { params: Promise<{ id: string
                 {featureToggle('リアクション', 'reaction')}
                 {featureToggle('フォローバック', 'followBack')}
                 {featureToggle('通知自動返信', 'notificationReply')}
+                {featureToggle('メンション反応', 'mentionReaction')}
                 {featureToggle('AI自己学習', 'selfLearning')}
               </div>
+
+              {/* メンション反応の詳細設定 */}
+              {features.mentionReaction && (
+                <div style={{ marginTop: '16px', padding: '16px', borderRadius: '10px', background: 'rgba(99, 102, 241, 0.08)', border: '1px solid rgba(99, 102, 241, 0.2)' }}>
+                  <h3 style={{ fontSize: '14px', fontWeight: 600, marginBottom: '12px', color: 'var(--color-text-primary)', display: 'flex', alignItems: 'center', gap: '8px' }}>
+                    <span>📡</span> メンション反応設定
+                  </h3>
+                  <p style={{ fontSize: '12px', color: 'var(--color-text-tertiary)', marginBottom: '16px', lineHeight: 1.6 }}>
+                    メンションやリプライを受け取った時の返信に使う設定です。空欄の場合はメインの設定を使用します。
+                  </p>
+
+                  {postMode === 'AI' && (
+                    <div className="form-group">
+                      <label className="label">メンション用キャラクター設定</label>
+                      <textarea className="input-field" rows={5}
+                        placeholder="空欄の場合はメインのキャラクター設定を使用"
+                        value={mentionSystemInstruction}
+                        onChange={e => setMentionSystemInstruction(e.target.value)} />
+                    </div>
+                  )}
+
+                  {postMode !== 'AI' && (
+                    <div className="form-group">
+                      <label className="label">メンション用返信テンプレート</label>
+                      <div style={{ display: 'flex', flexDirection: 'column', gap: '8px' }}>
+                        {mentionReplyTemplates.map((t, i) => (
+                          <div key={i} style={{ display: 'flex', gap: '8px', alignItems: 'flex-start' }}>
+                            <textarea className="input-field" rows={2} value={t} style={{ flex: 1 }}
+                              placeholder="空欄の場合はリプライテンプレートを使用"
+                              onChange={e => {
+                                const newTemplates = [...mentionReplyTemplates];
+                                newTemplates[i] = e.target.value;
+                                setMentionReplyTemplates(newTemplates);
+                              }} />
+                            <button type="button" className="btn btn-ghost" style={{ padding: '8px', color: 'var(--color-error)' }}
+                              onClick={() => setMentionReplyTemplates(mentionReplyTemplates.filter((_, idx) => idx !== i))}>
+                              ✖
+                            </button>
+                          </div>
+                        ))}
+                        <button type="button" className="btn btn-outline" style={{ alignSelf: 'flex-start', marginTop: '4px' }}
+                          onClick={() => setMentionReplyTemplates([...mentionReplyTemplates, ''])}>
+                          ＋ メンション用テンプレートを追加
+                        </button>
+                      </div>
+                    </div>
+                  )}
+                </div>
+              )}
             </div>
           </div>
 

@@ -30,6 +30,7 @@ export interface BotFeatures {
   reaction: boolean;
   followBack: boolean;
   notificationReply: boolean;
+  mentionReaction: boolean;
   selfLearning: boolean;
 }
 
@@ -45,6 +46,8 @@ export interface BotCreateRequest {
   systemInstruction?: string;
   postTemplates?: string[];
   replyTemplates?: string[];
+  mentionSystemInstruction?: string;
+  mentionReplyTemplates?: string[];
   probabilities?: Probabilities;
   features?: BotFeatures;
   blockedUsers?: string[];
@@ -71,6 +74,8 @@ export interface BotDetail extends BotSummary {
   systemInstruction: string;
   postTemplates: string[];
   replyTemplates: string[];
+  mentionSystemInstruction: string;
+  mentionReplyTemplates: string[];
   probabilities: Probabilities;
   features: BotFeatures;
   blockedUsers: string[];

@@ -1,6 +1,9 @@
 // ==========================================
 // Bot実行エンジン — 1サイクル分の処理
-// yudetamagobot.py の main() ループ1回分を実装
+// 3フェーズに分離:
+//   Phase 1: 自発カロート
+//   Phase 2: 通知処理（メンション反応含む）
+//   Phase 3: ランダムアクション
 // ==========================================
 import { prisma } from '@/lib/prisma';
 import { decrypt } from '@/lib/encryption';
@@ -9,12 +12,29 @@ import { postKaroto, likePost, rekarotPost, reactPost, followUser } from './acti
 import { getGlobalPosts, getPostDetail, getRootId, resolveQuoteChain, buildTlContext, calculateTlPace, getActivityMultiplier } from './timeline';
 import { getNotifications, classifyNotification } from './notifications';
 import { createProvider } from '@/lib/ai/provider';
+import type { AiProvider } from '@/lib/ai/provider';
 import {
   buildAutoPostPrompt, buildReplyPrompt, buildLikeSelectionPrompt,
   buildActionSelectionPrompt, buildEmojiSelectionPrompt,
   getTimeContext, extractKnowledgeAndClean
 } from '@/lib/ai/prompts';
 import type { BotFeatures, Probabilities } from '@/types';
+
+// --- 共通コンテキスト（フェーズ間で共有） ---
+interface BotContext {
+  bot: Awaited<ReturnType<typeof prisma.bot.findUnique>> & Record<string, unknown>;
+  client: KarotterClient;
+  provider: AiProvider;
+  features: BotFeatures;
+  probabilities: Probabilities;
+  blockedUsers: string[];
+  seenIds: Set<string>;
+  aiPostedIds: Set<string>;
+  systemInst: string;
+  mentionSystemInst: string;
+  actions: string[];
+  errors: string[];
+}
 
 /**
  * 指定されたBotの1サイクル分の処理を実行
@@ -89,185 +109,263 @@ export async function executeBotCycle(botId: string, forceAutoPost: boolean = fa
   const seenIds = new Set(bot.seenPosts.filter(s => s.type === 'SEEN').map(s => s.postId));
   const aiPostedIds = new Set(bot.seenPosts.filter(s => s.type === 'AI_POSTED').map(s => s.postId));
 
-  const actMult = getActivityMultiplier();
   const systemInst = bot.systemInstruction || '';
+  const mentionSystemInst = (bot as Record<string, unknown>).mentionSystemInstruction as string || '';
 
-  // --- 自発カロート ---
+  // コンテキストを構築
+  const ctx: BotContext = {
+    bot: bot as BotContext['bot'],
+    client, provider, features, probabilities, blockedUsers,
+    seenIds, aiPostedIds, systemInst, mentionSystemInst,
+    actions, errors,
+  };
+
+  // === Phase 1: 自発カロート ===
+  let didAutoPost = false;
   if (features.autoPost) {
-    let shouldAutoPost = false;
-    const now = new Date();
-    const lastPostTime = bot.lastAutoPostAt ? new Date(bot.lastAutoPostAt).getTime() : 0;
-    const diffSec = (now.getTime() - lastPostTime) / 1000;
-
-    const mode = bot.autoPostMode || 'DYNAMIC_PACE';
-
-    if (mode === 'FIXED_INTERVAL') {
-      const intervalSec = (bot.fixedIntervalMinutes || 60) * 60;
-      shouldAutoPost = diffSec > intervalSec;
-    } else if (mode === 'SPECIFIC_TIMES') {
-      // JST (UTC+9) の現在時刻を取得
-      const jstNow = new Date(now.getTime() + 9 * 60 * 60 * 1000);
-      const currentHHMM = `${jstNow.getUTCHours().toString().padStart(2, '0')}:${jstNow.getUTCMinutes().toString().padStart(2, '0')}`;
-      
-      const targetTimes = (bot.specificTimes as string[]) || [];
-      // 過去1時間の間に指定時刻を過ぎていて、かつまだその時間枠で投稿していない場合に投稿する
-      // シンプルな実装：Cronが5分おきに走る前提で、現在時刻が指定時刻の「0〜5分後」の範囲に入っていて、かつ前回投稿から45分以上経過していれば投稿
-      shouldAutoPost = targetTimes.some(time => {
-        const [targetH, targetM] = time.split(':').map(Number);
-        const targetMinutes = targetH * 60 + targetM;
-        const currentMinutes = jstNow.getUTCHours() * 60 + jstNow.getUTCMinutes();
-        const diffMinutes = currentMinutes - targetMinutes;
-        
-        // 指定時刻から5分以内（Cron実行のブレを考慮）で、前回投稿から45分以上経っていればOK
-        return diffMinutes >= 0 && diffMinutes <= 5 && diffSec > 45 * 60;
-      });
-    } else {
-      // DYNAMIC_PACE
-      shouldAutoPost = !bot.lastAutoPostAt || diffSec > bot.autoPostMinInterval;
-    }
-
-    if (forceAutoPost) {
-      shouldAutoPost = true;
-    }
-
-    if (shouldAutoPost) {
-      try {
-        const timeline = await getGlobalPosts(client, 60);
-        const tlContext = buildTlContext(timeline, bot.karotterUsername, blockedUsers);
-        const recentPosts = (bot.recentPosts as string[]) || [];
-        const timeContext = getTimeContext();
-
-        let postText: string;
-        if (bot.postMode === 'AI') {
-          const prompt = buildAutoPostPrompt(tlContext, recentPosts, timeContext);
-          const raw = await provider.generateText(prompt, systemInst, { temperature: 0.85 });
-          const { cleanText, knowledge } = extractKnowledgeAndClean(raw);
-          postText = cleanText;
-          if (knowledge && features.selfLearning) {
-            await updateKnowledge(botId, knowledge);
-          }
-        } else {
-          postText = await provider.generateText('', '', {});
-        }
-
-        if (postText && postText !== 'SKIP') {
-          const newId = await postKaroto(client, postText);
-          if (newId) {
-            actions.push(`自発カロート: ${postText.slice(0, 50)}`);
-            await markSeen(botId, newId, 'AI_POSTED');
-            await updateRecentPosts(botId, postText);
-            await logAction(botId, 'POST', postText.slice(0, 200), true, undefined, newId);
-          }
-        }
-
-        await prisma.bot.update({
-          where: { id: botId },
-          data: { lastAutoPostAt: new Date() },
-        });
-      } catch (e) {
-        errors.push(`自発カロートエラー: ${e}`);
-        await logAction(botId, 'ERROR', `自発カロートエラー: ${e}`, false);
-      }
-    }
+    didAutoPost = await executeAutoPost(ctx, forceAutoPost);
   }
 
-  // --- 通知処理 ---
+  // === Phase 2: 通知処理（メンション反応含む） ===
   if (features.notificationReply) {
-    try {
-      const notifications = await getNotifications(client);
-      for (const n of notifications) {
-        if (typeof n !== 'object' || !n) continue;
+    await executeNotifications(ctx);
+  }
 
-        const classified = classifyNotification(n, bot.karotterUsername, aiPostedIds);
+  // === Phase 3: ランダムアクション ===
+  // 定期投稿モード（FIXED_INTERVAL / SPECIFIC_TIMES）の場合、
+  // 自発カロートが発生したサイクルでのみランダムアクションを実行
+  const autoPostMode = bot.autoPostMode || 'DYNAMIC_PACE';
+  const isScheduledMode = autoPostMode === 'FIXED_INTERVAL' || autoPostMode === 'SPECIFIC_TIMES';
+  const shouldRunRandomActions = isScheduledMode ? didAutoPost : true;
 
-        if (classified.type === 'ignore') continue;
-        if (seenIds.has(classified.postId)) continue;
-        if (classified.authorUsername.toLowerCase() === bot.karotterUsername.toLowerCase()) continue;
-        if (classified.authorUsername.toLowerCase().includes('bot')) continue;
-        if (blockedUsers.map(u => u.toLowerCase()).includes(classified.authorUsername.toLowerCase())) continue;
+  if (shouldRunRandomActions) {
+    await executeRandomActions(ctx);
+  }
 
-        // フォローバック
-        if (classified.type === 'follow' && features.followBack) {
-          if (classified.authorId) {
-            await followUser(client, classified.authorId);
-            actions.push(`フォローバック: @${classified.authorUsername}`);
-            await logAction(botId, 'FOLLOW', `@${classified.authorUsername}をフォローバック`, true);
-          }
+  // トークンをキャッシュ更新
+  await prisma.bot.update({
+    where: { id: botId },
+    data: {
+      accessToken: client.getAccessToken(),
+      lastExecutedAt: new Date(),
+    },
+  });
+
+  return { actions, errors };
+}
+
+// ==========================================
+// Phase 1: 自発カロート
+// ==========================================
+async function executeAutoPost(ctx: BotContext, forceAutoPost: boolean): Promise<boolean> {
+  const { bot, client, provider, blockedUsers, systemInst, actions, errors } = ctx;
+  const botId = bot.id;
+
+  let shouldAutoPost = false;
+  const now = new Date();
+  const lastPostTime = bot.lastAutoPostAt ? new Date(bot.lastAutoPostAt).getTime() : 0;
+  const diffSec = (now.getTime() - lastPostTime) / 1000;
+
+  const mode = bot.autoPostMode || 'DYNAMIC_PACE';
+
+  if (mode === 'FIXED_INTERVAL') {
+    const intervalSec = (bot.fixedIntervalMinutes || 60) * 60;
+    shouldAutoPost = diffSec > intervalSec;
+  } else if (mode === 'SPECIFIC_TIMES') {
+    // JST (UTC+9) の現在時刻を取得
+    const jstNow = new Date(now.getTime() + 9 * 60 * 60 * 1000);
+    const targetTimes = (bot.specificTimes as string[]) || [];
+    shouldAutoPost = targetTimes.some(time => {
+      const [targetH, targetM] = time.split(':').map(Number);
+      const targetMinutes = targetH * 60 + targetM;
+      const currentMinutes = jstNow.getUTCHours() * 60 + jstNow.getUTCMinutes();
+      const diffMinutes = currentMinutes - targetMinutes;
+      return diffMinutes >= 0 && diffMinutes <= 5 && diffSec > 45 * 60;
+    });
+  } else {
+    // DYNAMIC_PACE
+    shouldAutoPost = !bot.lastAutoPostAt || diffSec > bot.autoPostMinInterval;
+  }
+
+  if (forceAutoPost) {
+    shouldAutoPost = true;
+  }
+
+  if (!shouldAutoPost) return false;
+
+  try {
+    const timeline = await getGlobalPosts(client, 60);
+    const tlContext = buildTlContext(timeline, bot.karotterUsername, blockedUsers);
+    const recentPosts = (bot.recentPosts as string[]) || [];
+    const timeContext = getTimeContext();
+
+    let postText: string;
+    if (bot.postMode === 'AI') {
+      const prompt = buildAutoPostPrompt(tlContext, recentPosts, timeContext);
+      const raw = await provider.generateText(prompt, systemInst, { temperature: 0.85 });
+      const { cleanText, knowledge } = extractKnowledgeAndClean(raw);
+      postText = cleanText;
+      if (knowledge && ctx.features.selfLearning) {
+        await updateKnowledge(botId, knowledge);
+      }
+    } else {
+      postText = await provider.generateText('', '', {});
+    }
+
+    if (postText && postText !== 'SKIP') {
+      const newId = await postKaroto(client, postText);
+      if (newId) {
+        actions.push(`自発カロート: ${postText.slice(0, 50)}`);
+        await markSeen(botId, newId, 'AI_POSTED');
+        await updateRecentPosts(botId, postText);
+        await logAction(botId, 'POST', postText.slice(0, 200), true, undefined, newId);
+      }
+    }
+
+    await prisma.bot.update({
+      where: { id: botId },
+      data: { lastAutoPostAt: new Date() },
+    });
+
+    return true;
+  } catch (e) {
+    errors.push(`自発カロートエラー: ${e}`);
+    await logAction(botId, 'ERROR', `自発カロートエラー: ${e}`, false);
+    return false;
+  }
+}
+
+// ==========================================
+// Phase 2: 通知処理（メンション反応含む）
+// ==========================================
+async function executeNotifications(ctx: BotContext): Promise<void> {
+  const { bot, client, provider, features, blockedUsers, seenIds, aiPostedIds, systemInst, mentionSystemInst, actions, errors } = ctx;
+  const botId = bot.id;
+  const actMult = getActivityMultiplier();
+
+  // メンション反応用テンプレートを取得
+  const mentionReplyTemplates = ((bot as Record<string, unknown>).mentionReplyTemplates as string[]) || [];
+
+  try {
+    const notifications = await getNotifications(client);
+    for (const n of notifications) {
+      if (typeof n !== 'object' || !n) continue;
+
+      const classified = classifyNotification(n, bot.karotterUsername, aiPostedIds);
+
+      if (classified.type === 'ignore') continue;
+      if (seenIds.has(classified.postId)) continue;
+      if (classified.authorUsername.toLowerCase() === bot.karotterUsername.toLowerCase()) continue;
+      if (classified.authorUsername.toLowerCase().includes('bot')) continue;
+      if (blockedUsers.map(u => u.toLowerCase()).includes(classified.authorUsername.toLowerCase())) continue;
+
+      // フォローバック
+      if (classified.type === 'follow' && features.followBack) {
+        if (classified.authorId) {
+          await followUser(client, classified.authorId);
+          actions.push(`フォローバック: @${classified.authorUsername}`);
+          await logAction(botId, 'FOLLOW', `@${classified.authorUsername}をフォローバック`, true);
+        }
+        await markSeen(botId, classified.postId, 'SEEN');
+        continue;
+      }
+
+      // メンション・リプライ・引用への返信
+      if (['mention', 'reply', 'quote'].includes(classified.type)) {
+        // メンション反応がOFFの場合はスキップ
+        if (!features.mentionReaction) {
           await markSeen(botId, classified.postId, 'SEEN');
           continue;
         }
 
-        // メンション・リプライ・引用への返信
-        if (['mention', 'reply', 'quote'].includes(classified.type)) {
-          if (Math.random() > actMult) {
-            actions.push(`既読スルー: @${classified.authorUsername}`);
-            await markSeen(botId, classified.postId, 'SEEN');
-            continue;
-          }
-
-          let cleanContent = classified.content.replace(new RegExp(`^@${bot.karotterUsername}\\s*`, 'i'), '').trim();
-          if (!cleanContent && !classified.mediaUrls.length) cleanContent = 'こんにちは';
-
-          if (bot.postMode === 'AI') {
-            const postDetail = (n.post || {}) as import('@/types').KarotterPost;
-            const quoteChain = await resolveQuoteChain(client, postDetail);
-            const rootId = await getRootId(client, postDetail);
-
-            // スレッドメモリから会話履歴を取得
-            const threadMem = bot.threadMemory as Record<string, { conversations?: string[]; features?: string }> || {};
-            const threadKey = `${classified.authorUsername}_${rootId}`;
-            const history = threadMem[threadKey]?.conversations?.join('\n') || '';
-
-            const prompt = buildReplyPrompt(cleanContent, getTimeContext(), history, quoteChain, classified.isQuote);
-            const raw = await provider.generateWithImages(prompt, classified.mediaUrls, systemInst, { temperature: 0.7 });
-            const { cleanText, knowledge } = extractKnowledgeAndClean(raw);
-
-            if (knowledge && features.selfLearning) {
-              await updateKnowledge(botId, knowledge);
-            }
-
-            if (cleanText && cleanText !== 'SKIP') {
-              let replyText = cleanText;
-              let actionType: 'REPLY' | 'QUOTE' = 'REPLY';
-
-              if (classified.isQuote && cleanText.startsWith('[QUOTE]')) {
-                replyText = cleanText.replace('[QUOTE]', '').trim();
-                actionType = 'QUOTE';
-              } else if (cleanText.startsWith('[REPLY]')) {
-                replyText = cleanText.replace('[REPLY]', '').trim();
-              }
-
-              const newId = actionType === 'QUOTE'
-                ? await postKaroto(client, replyText, { quoteId: classified.postId })
-                : await postKaroto(client, replyText, { parentId: classified.postId });
-
-              if (newId) {
-                actions.push(`${actionType}: @${classified.authorUsername} → ${replyText.slice(0, 50)}`);
-                await markSeen(botId, newId, 'AI_POSTED');
-                await logAction(botId, actionType, `@${classified.authorUsername}に返信: ${replyText.slice(0, 200)}`, true, classified.postId, newId);
-              }
-            }
-          } else {
-            // テンプレートモード
-            const replyText = await provider.generateWithImages('', [], '', {});
-            if (replyText && replyText !== 'SKIP') {
-              const newId = await postKaroto(client, replyText, { parentId: classified.postId });
-              if (newId) {
-                actions.push(`REPLY(テンプレート): @${classified.authorUsername}`);
-                await logAction(botId, 'REPLY', `テンプレート返信: ${replyText.slice(0, 200)}`, true, classified.postId, newId);
-              }
-            }
-          }
+        if (Math.random() > actMult) {
+          actions.push(`既読スルー: @${classified.authorUsername}`);
           await markSeen(botId, classified.postId, 'SEEN');
+          continue;
         }
-      }
-    } catch (e) {
-      errors.push(`通知処理エラー: ${e}`);
-      await logAction(botId, 'ERROR', `通知処理エラー: ${e}`, false);
-    }
-  }
 
-  // --- ランダムアクション ---
+        let cleanContent = classified.content.replace(new RegExp(`^@${bot.karotterUsername}\\s*`, 'i'), '').trim();
+        if (!cleanContent && !classified.mediaUrls.length) cleanContent = 'こんにちは';
+
+        // メンション反応用のシステムプロンプトを決定
+        // mentionSystemInstruction が設定されていればそちらを優先
+        const effectiveSystemInst = mentionSystemInst || systemInst;
+
+        if (bot.postMode === 'AI') {
+          const postDetail = (n.post || {}) as import('@/types').KarotterPost;
+          const quoteChain = await resolveQuoteChain(client, postDetail);
+          const rootId = await getRootId(client, postDetail);
+
+          // スレッドメモリから会話履歴を取得
+          const threadMem = bot.threadMemory as Record<string, { conversations?: string[]; features?: string }> || {};
+          const threadKey = `${classified.authorUsername}_${rootId}`;
+          const history = threadMem[threadKey]?.conversations?.join('\n') || '';
+
+          const prompt = buildReplyPrompt(cleanContent, getTimeContext(), history, quoteChain, classified.isQuote);
+          const raw = await provider.generateWithImages(prompt, classified.mediaUrls, effectiveSystemInst, { temperature: 0.7 });
+          const { cleanText, knowledge } = extractKnowledgeAndClean(raw);
+
+          if (knowledge && features.selfLearning) {
+            await updateKnowledge(botId, knowledge);
+          }
+
+          if (cleanText && cleanText !== 'SKIP') {
+            let replyText = cleanText;
+            let actionType: 'REPLY' | 'QUOTE' = 'REPLY';
+
+            if (classified.isQuote && cleanText.startsWith('[QUOTE]')) {
+              replyText = cleanText.replace('[QUOTE]', '').trim();
+              actionType = 'QUOTE';
+            } else if (cleanText.startsWith('[REPLY]')) {
+              replyText = cleanText.replace('[REPLY]', '').trim();
+            }
+
+            const newId = actionType === 'QUOTE'
+              ? await postKaroto(client, replyText, { quoteId: classified.postId })
+              : await postKaroto(client, replyText, { parentId: classified.postId });
+
+            if (newId) {
+              actions.push(`${actionType}: @${classified.authorUsername} → ${replyText.slice(0, 50)}`);
+              await markSeen(botId, newId, 'AI_POSTED');
+              await logAction(botId, actionType, `@${classified.authorUsername}に返信: ${replyText.slice(0, 200)}`, true, classified.postId, newId);
+            }
+          }
+        } else {
+          // テンプレートモード
+          // メンション専用テンプレートがあればそちらを使用
+          let replyText: string;
+          if (mentionReplyTemplates.length > 0) {
+            const idx = Math.floor(Math.random() * mentionReplyTemplates.length);
+            replyText = mentionReplyTemplates[idx];
+          } else {
+            replyText = await provider.generateWithImages('', [], '', {});
+          }
+
+          if (replyText && replyText !== 'SKIP') {
+            const newId = await postKaroto(client, replyText, { parentId: classified.postId });
+            if (newId) {
+              actions.push(`REPLY(テンプレート): @${classified.authorUsername}`);
+              await logAction(botId, 'REPLY', `テンプレート返信: ${replyText.slice(0, 200)}`, true, classified.postId, newId);
+            }
+          }
+        }
+        await markSeen(botId, classified.postId, 'SEEN');
+      }
+    }
+  } catch (e) {
+    errors.push(`通知処理エラー: ${e}`);
+    await logAction(botId, 'ERROR', `通知処理エラー: ${e}`, false);
+  }
+}
+
+// ==========================================
+// Phase 3: ランダムアクション
+// ==========================================
+async function executeRandomActions(ctx: BotContext): Promise<void> {
+  const { bot, client, provider, features, probabilities, blockedUsers, seenIds, aiPostedIds, systemInst, actions, errors } = ctx;
+  const botId = bot.id;
+  const actMult = getActivityMultiplier();
+
   try {
     const totalProb = (probabilities.like + probabilities.rekarot + probabilities.quote + probabilities.reply + probabilities.react) * actMult;
     const rand = Math.random();
@@ -402,17 +500,6 @@ export async function executeBotCycle(botId: string, forceAutoPost: boolean = fa
   } catch (e) {
     errors.push(`ランダムアクションエラー: ${e}`);
   }
-
-  // トークンをキャッシュ更新
-  await prisma.bot.update({
-    where: { id: botId },
-    data: {
-      accessToken: client.getAccessToken(),
-      lastExecutedAt: new Date(),
-    },
-  });
-
-  return { actions, errors };
 }
 
 // --- ヘルパー関数 ---

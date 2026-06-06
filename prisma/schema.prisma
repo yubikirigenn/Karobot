@@ -61,6 +61,9 @@ model Bot {
   blockedUsers           Json      @default("[]")   // string[]
 
   // 投稿間隔設定
+  autoPostMode           AutoPostMode @default(DYNAMIC_PACE)
+  fixedIntervalMinutes   Int?
+  specificTimes          Json      @default("[]")   // string[] of "HH:mm"
   autoPostMinInterval    Int       @default(30)
   autoPostPaceMultiplier Float     @default(4.7)
   autoPostMaxInterval    Int       @default(3600)
@@ -135,6 +138,12 @@ enum PostMode {
   AI
   FIXED_TEMPLATE
   RANDOM_TEMPLATE
+}
+
+enum AutoPostMode {
+  DYNAMIC_PACE
+  FIXED_INTERVAL
+  SPECIFIC_TIMES
 }
 
 enum AiProvider {

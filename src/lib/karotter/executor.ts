@@ -92,8 +92,37 @@ export async function executeBotCycle(botId: string): Promise<{ actions: string[
 
   // --- 自発カロート ---
   if (features.autoPost) {
-    const shouldAutoPost = !bot.lastAutoPostAt ||
-      (Date.now() - new Date(bot.lastAutoPostAt).getTime()) / 1000 > bot.autoPostMinInterval;
+    let shouldAutoPost = false;
+    const now = new Date();
+    const lastPostTime = bot.lastAutoPostAt ? new Date(bot.lastAutoPostAt).getTime() : 0;
+    const diffSec = (now.getTime() - lastPostTime) / 1000;
+
+    const mode = bot.autoPostMode || 'DYNAMIC_PACE';
+
+    if (mode === 'FIXED_INTERVAL') {
+      const intervalSec = (bot.fixedIntervalMinutes || 60) * 60;
+      shouldAutoPost = diffSec > intervalSec;
+    } else if (mode === 'SPECIFIC_TIMES') {
+      // JST (UTC+9) の現在時刻を取得
+      const jstNow = new Date(now.getTime() + 9 * 60 * 60 * 1000);
+      const currentHHMM = `${jstNow.getUTCHours().toString().padStart(2, '0')}:${jstNow.getUTCMinutes().toString().padStart(2, '0')}`;
+      
+      const targetTimes = (bot.specificTimes as string[]) || [];
+      // 過去1時間の間に指定時刻を過ぎていて、かつまだその時間枠で投稿していない場合に投稿する
+      // シンプルな実装：Cronが5分おきに走る前提で、現在時刻が指定時刻の「0〜5分後」の範囲に入っていて、かつ前回投稿から45分以上経過していれば投稿
+      shouldAutoPost = targetTimes.some(time => {
+        const [targetH, targetM] = time.split(':').map(Number);
+        const targetMinutes = targetH * 60 + targetM;
+        const currentMinutes = jstNow.getUTCHours() * 60 + jstNow.getUTCMinutes();
+        const diffMinutes = currentMinutes - targetMinutes;
+        
+        // 指定時刻から5分以内（Cron実行のブレを考慮）で、前回投稿から45分以上経っていればOK
+        return diffMinutes >= 0 && diffMinutes <= 5 && diffSec > 45 * 60;
+      });
+    } else {
+      // DYNAMIC_PACE
+      shouldAutoPost = !bot.lastAutoPostAt || diffSec > bot.autoPostMinInterval;
+    }
 
     if (shouldAutoPost) {
       try {

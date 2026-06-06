@@ -61,6 +61,7 @@ export async function PUT(
       'systemInstruction', 'postTemplates', 'replyTemplates',
       'probabilities', 'features', 'blockedUsers',
       'autoPostMinInterval', 'autoPostPaceMultiplier', 'autoPostMaxInterval',
+      'autoPostMode', 'fixedIntervalMinutes', 'specificTimes',
     ];
 
     for (const field of simpleFields) {
@@ -94,7 +95,8 @@ export async function PUT(
     if (e instanceof Error && e.message === 'Unauthorized') {
       return NextResponse.json({ error: '認証が必要です' }, { status: 401 });
     }
-    return NextResponse.json({ error: '更新に失敗しました' }, { status: 500 });
+    const errorMessage = e instanceof Error ? e.message : String(e);
+    return NextResponse.json({ error: `更新に失敗しました: ${errorMessage}` }, { status: 500 });
   }
 }
 

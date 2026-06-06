@@ -41,6 +41,9 @@ export default function NewBotPage() {
   const [features, setFeatures] = useState<BotFeatures>(defaultFeatures);
 
   // 間隔設定
+  const [autoPostMode, setAutoPostMode] = useState<'DYNAMIC_PACE' | 'FIXED_INTERVAL' | 'SPECIFIC_TIMES'>('DYNAMIC_PACE');
+  const [fixedIntervalMinutes, setFixedIntervalMinutes] = useState(60);
+  const [specificTimes, setSpecificTimes] = useState<string[]>(['12:00']);
   const [minInterval, setMinInterval] = useState(30);
   const [paceMultiplier, setPaceMultiplier] = useState(4.7);
   const [maxInterval, setMaxInterval] = useState(3600);
@@ -81,6 +84,9 @@ export default function NewBotPage() {
         autoPostMinInterval: minInterval,
         autoPostPaceMultiplier: paceMultiplier,
         autoPostMaxInterval: maxInterval,
+        autoPostMode,
+        fixedIntervalMinutes,
+        specificTimes,
       };
 
       const res = await fetch('/api/bots', {
@@ -144,6 +150,20 @@ export default function NewBotPage() {
             <h1 className="page-title">新しいBotを作成</h1>
             <p className="page-subtitle">Karotterで動作するBotの設定を行います</p>
           </div>
+        </div>
+
+        <div style={{
+          padding: '16px 20px', borderRadius: '12px', marginBottom: '24px',
+          background: 'rgba(255, 171, 0, 0.1)', border: '1px solid rgba(255, 171, 0, 0.3)',
+          color: '#ffd06b'
+        }}>
+          <h3 style={{ fontSize: '15px', fontWeight: 600, marginBottom: '8px', display: 'flex', alignItems: 'center', gap: '8px' }}>
+            <span>⚠️</span> 登録前の確認事項
+          </h3>
+          <p style={{ fontSize: '14px', lineHeight: 1.6, margin: 0, opacity: 0.9 }}>
+            Botを作成する前に、Karotterの公式サイトであらかじめ<strong>Bot用のアカウントを新規作成</strong>し、
+            <strong>メール認証を完了</strong>させておく必要があります。まだの方はお済ませください。
+          </p>
         </div>
 
         {error && (
@@ -301,24 +321,89 @@ export default function NewBotPage() {
           {/* 投稿間隔 */}
           <div className="glass-card" style={{ marginBottom: '20px' }}>
             <div className="section">
-              <h2 className="section-title"><span>⏰</span> 投稿間隔</h2>
-              <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr 1fr', gap: '16px' }}>
-                <div className="form-group">
-                  <label className="label" htmlFor="min-interval">最小間隔（秒）</label>
-                  <input id="min-interval" type="number" className="input-field"
-                    value={minInterval} onChange={e => setMinInterval(parseInt(e.target.value) || 30)} min={10} />
-                </div>
-                <div className="form-group">
-                  <label className="label" htmlFor="max-interval">最大間隔（秒）</label>
-                  <input id="max-interval" type="number" className="input-field"
-                    value={maxInterval} onChange={e => setMaxInterval(parseInt(e.target.value) || 3600)} min={60} />
-                </div>
-                <div className="form-group">
-                  <label className="label" htmlFor="pace-mult">ペース倍率</label>
-                  <input id="pace-mult" type="number" className="input-field" step="0.1"
-                    value={paceMultiplier} onChange={e => setPaceMultiplier(parseFloat(e.target.value) || 4.7)} min={0.1} />
-                </div>
+              <h2 className="section-title"><span>⏰</span> 投稿頻度</h2>
+              
+              <div style={{ display: 'flex', flexDirection: 'column', gap: '12px', marginBottom: '20px' }}>
+                {[
+                  { value: 'DYNAMIC_PACE', label: '📊 ダイナミックペース', desc: 'タイムラインの流速に合わせて自動調整（推奨）' },
+                  { value: 'FIXED_INTERVAL', label: '⏳ 固定間隔', desc: '指定した分数おきに定期的に投稿' },
+                  { value: 'SPECIFIC_TIMES', label: '🕰 指定時刻', desc: '毎日決まった時間（日本時間）に投稿' },
+                ].map(opt => (
+                  <label key={opt.value} className="glass-card" style={{
+                    padding: '14px 16px', cursor: 'pointer', display: 'flex', alignItems: 'center', gap: '12px',
+                    borderColor: autoPostMode === opt.value ? 'var(--color-accent)' : undefined,
+                    background: autoPostMode === opt.value ? 'var(--color-bg-glass-hover)' : undefined,
+                  }}>
+                    <input type="radio" name="autoPostMode" value={opt.value} checked={autoPostMode === opt.value}
+                      onChange={() => setAutoPostMode(opt.value as any)} style={{ accentColor: 'var(--color-accent)' }} />
+                    <div>
+                      <div style={{ fontWeight: 600, fontSize: '14px' }}>{opt.label}</div>
+                      <div className="text-sm text-muted">{opt.desc}</div>
+                    </div>
+                  </label>
+                ))}
               </div>
+
+              {autoPostMode === 'DYNAMIC_PACE' && (
+                <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr 1fr', gap: '16px', borderTop: '1px solid var(--color-border)', paddingTop: '20px' }}>
+                  <div className="form-group">
+                    <label className="label" htmlFor="min-interval">最小間隔（秒）</label>
+                    <input id="min-interval" type="number" className="input-field"
+                      value={minInterval} onChange={e => setMinInterval(parseInt(e.target.value) || 30)} min={10} />
+                  </div>
+                  <div className="form-group">
+                    <label className="label" htmlFor="max-interval">最大間隔（秒）</label>
+                    <input id="max-interval" type="number" className="input-field"
+                      value={maxInterval} onChange={e => setMaxInterval(parseInt(e.target.value) || 3600)} min={60} />
+                  </div>
+                  <div className="form-group">
+                    <label className="label" htmlFor="pace-mult">ペース倍率</label>
+                    <input id="pace-mult" type="number" className="input-field" step="0.1"
+                      value={paceMultiplier} onChange={e => setPaceMultiplier(parseFloat(e.target.value) || 4.7)} min={0.1} />
+                  </div>
+                </div>
+              )}
+
+              {autoPostMode === 'FIXED_INTERVAL' && (
+                <div style={{ borderTop: '1px solid var(--color-border)', paddingTop: '20px' }}>
+                  <div className="form-group">
+                    <label className="label" htmlFor="fixed-interval">投稿間隔（分）</label>
+                    <div style={{ display: 'flex', alignItems: 'center', gap: '12px' }}>
+                      <input id="fixed-interval" type="number" className="input-field" style={{ maxWidth: '120px' }}
+                        value={fixedIntervalMinutes} onChange={e => setFixedIntervalMinutes(parseInt(e.target.value) || 5)} min={5} />
+                      <span className="text-muted">分ごとに投稿</span>
+                    </div>
+                    <p className="label-hint">※システムの仕様上、最短は「5分間隔」となります。</p>
+                  </div>
+                </div>
+              )}
+
+              {autoPostMode === 'SPECIFIC_TIMES' && (
+                <div style={{ borderTop: '1px solid var(--color-border)', paddingTop: '20px' }}>
+                  <div className="form-group">
+                    <label className="label">投稿時刻（JST: 日本時間）</label>
+                    <div style={{ display: 'flex', flexDirection: 'column', gap: '8px' }}>
+                      {specificTimes.map((time, idx) => (
+                        <div key={idx} style={{ display: 'flex', gap: '8px' }}>
+                          <input type="time" className="input-field" style={{ maxWidth: '150px' }}
+                            value={time} onChange={e => {
+                              const newTimes = [...specificTimes];
+                              newTimes[idx] = e.target.value;
+                              setSpecificTimes(newTimes);
+                            }} />
+                          <button type="button" className="btn btn-secondary" onClick={() => {
+                            setSpecificTimes(specificTimes.filter((_, i) => i !== idx));
+                          }}>削除</button>
+                        </div>
+                      ))}
+                      <button type="button" className="btn btn-secondary" style={{ width: 'fit-content', marginTop: '8px' }}
+                        onClick={() => setSpecificTimes([...specificTimes, '12:00'])}>
+                        + 時刻を追加
+                      </button>
+                    </div>
+                  </div>
+                </div>
+              )}
             </div>
           </div>
 

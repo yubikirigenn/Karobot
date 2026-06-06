@@ -71,6 +71,9 @@ export async function POST(request: NextRequest) {
         autoPostMinInterval: body.autoPostMinInterval || 30,
         autoPostPaceMultiplier: body.autoPostPaceMultiplier || 4.7,
         autoPostMaxInterval: body.autoPostMaxInterval || 3600,
+        autoPostMode: body.autoPostMode || 'DYNAMIC_PACE',
+        fixedIntervalMinutes: body.fixedIntervalMinutes || 60,
+        specificTimes: body.specificTimes || [],
       },
       select: {
         id: true,
@@ -89,6 +92,7 @@ export async function POST(request: NextRequest) {
     if (e instanceof Error && e.message === 'Unauthorized') {
       return NextResponse.json({ error: '認証が必要です' }, { status: 401 });
     }
-    return NextResponse.json({ error: 'Bot作成に失敗しました' }, { status: 500 });
+    const errorMessage = e instanceof Error ? e.message : String(e);
+    return NextResponse.json({ error: `Bot作成に失敗しました: ${errorMessage}` }, { status: 500 });
   }
 }

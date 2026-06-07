@@ -329,15 +329,21 @@ async function executeNotifications(ctx: BotContext): Promise<void> {
               replyText = cleanText.replace('[REPLY]', '').trim();
             }
 
-            const newId = actionType === 'QUOTE'
-              ? await postKaroto(client, replyText, { quoteId: classified.postId })
-              : await postKaroto(client, replyText, { parentId: classified.postId });
+            try {
+              const newId = actionType === 'QUOTE'
+                ? await postKaroto(client, replyText, { quoteId: classified.postId })
+                : await postKaroto(client, replyText, { parentId: classified.postId });
 
-            if (newId) {
-              actions.push(`${actionType}: @${classified.authorUsername} → ${replyText.slice(0, 50)}`);
-              await markSeen(botId, newId, 'AI_POSTED');
+              if (newId) {
+                actions.push(`${actionType}: @${classified.authorUsername} → ${replyText.slice(0, 50)}`);
+                await markSeen(botId, newId, 'AI_POSTED');
+                await markSeen(botId, classified.postId, 'SEEN');
+                await logAction(botId, actionType, '@' + classified.authorUsername + 'に返信: ' + replyText.slice(0, 200), true, classified.postId, newId);
+              }
+            } catch (e) {
+              actions.push(`返信投稿エラー: @${classified.authorUsername}`);
+              await logAction(botId, 'ERROR', 'AI返信投稿エラー (@' + classified.authorUsername + 'への返信): ' + e, false, classified.postId);
               await markSeen(botId, classified.postId, 'SEEN');
-              await logAction(botId, actionType, '@' + classified.authorUsername + 'に返信: ' + replyText.slice(0, 200), true, classified.postId, newId);
             }
           }
         } else {
@@ -352,10 +358,15 @@ async function executeNotifications(ctx: BotContext): Promise<void> {
           }
 
           if (replyText && replyText !== 'SKIP') {
-            const newId = await postKaroto(client, replyText, { parentId: classified.postId });
-            if (newId) {
-              actions.push(`REPLY(テンプレート): @${classified.authorUsername}`);
-              await logAction(botId, 'REPLY', 'テンプレート返信: ' + replyText.slice(0, 200), true, classified.postId, newId);
+            try {
+              const newId = await postKaroto(client, replyText, { parentId: classified.postId });
+              if (newId) {
+                actions.push(`REPLY(テンプレート): @${classified.authorUsername}`);
+                await logAction(botId, 'REPLY', 'テンプレート返信: ' + replyText.slice(0, 200), true, classified.postId, newId);
+              }
+            } catch (e) {
+              actions.push(`返信投稿エラー: @${classified.authorUsername}`);
+              await logAction(botId, 'ERROR', 'テンプレート返信投稿エラー (@' + classified.authorUsername + 'への返信): ' + e, false, classified.postId);
             }
           }
         }

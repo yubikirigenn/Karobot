@@ -86,6 +86,9 @@ model Bot {
   botKnowledge           Json      @default("[]")
   recentPosts            Json      @default("[]")   // 直近の投稿履歴
 
+  // 口調クローン対象
+  cloneTargetUsername    String?
+
   createdAt              DateTime  @default(now())
   updatedAt              DateTime  @updatedAt
 

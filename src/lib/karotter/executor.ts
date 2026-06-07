@@ -32,6 +32,7 @@ interface BotContext {
   aiPostedIds: Set<string>;
   systemInst: string;
   mentionSystemInst: string;
+  cloneContext?: string;
   actions: string[];
   errors: string[];
 }
@@ -112,11 +113,27 @@ export async function executeBotCycle(botId: string, forceAutoPost: boolean = fa
   const systemInst = bot.systemInstruction || '';
   const mentionSystemInst = (bot as Record<string, unknown>).mentionSystemInstruction as string || '';
 
+  // 口調クローン用コンテキストの取得
+  let cloneContext: string | undefined = undefined;
+  if (bot.postMode === 'AI' && bot.cloneTargetUsername) {
+    try {
+      const cloneRes = await client.getUserPosts(bot.cloneTargetUsername, 5);
+      if (cloneRes.ok && Array.isArray(cloneRes.data)) {
+        cloneContext = cloneRes.data
+          .filter((p: any) => p && p.content)
+          .map((p: any) => `- ${p.content.slice(0, 100)}`)
+          .join('\n');
+      }
+    } catch (e) {
+      console.error(`口調クローン取得エラー: ${e}`);
+    }
+  }
+
   // コンテキストを構築
   const ctx: BotContext = {
     bot: bot as BotContext['bot'],
     client, provider, features, probabilities, blockedUsers,
-    seenIds, aiPostedIds, systemInst, mentionSystemInst,
+    seenIds, aiPostedIds, systemInst, mentionSystemInst, cloneContext,
     actions, errors,
   };
 
@@ -199,7 +216,7 @@ async function executeAutoPost(ctx: BotContext, forceAutoPost: boolean): Promise
 
     let postText: string;
     if (bot.postMode === 'AI') {
-      const prompt = buildAutoPostPrompt(tlContext, recentPosts, timeContext);
+      const prompt = buildAutoPostPrompt(tlContext, recentPosts, timeContext, ctx.cloneContext);
       const raw = await provider.generateText(prompt, systemInst, { temperature: 0.85 });
       const { cleanText, knowledge } = extractKnowledgeAndClean(raw);
       postText = cleanText;
@@ -299,7 +316,7 @@ async function executeNotifications(ctx: BotContext): Promise<void> {
           const threadKey = `${classified.authorUsername}_${rootId}`;
           const history = threadMem[threadKey]?.conversations?.join('\n') || '';
 
-          const prompt = buildReplyPrompt(cleanContent, getTimeContext(), history, quoteChain, classified.isQuote);
+          const prompt = buildReplyPrompt(cleanContent, getTimeContext(), history, quoteChain, classified.isQuote, ctx.cloneContext);
           let raw: string;
           try {
             raw = await provider.generateWithImages(prompt, classified.mediaUrls, effectiveSystemInst, { temperature: 0.7 });
@@ -493,7 +510,7 @@ async function executeRandomActions(ctx: BotContext): Promise<void> {
                     ? `以下の投稿を引用リツイートします。フランクにコメントして:\n「${content}」`
                     : content;
                   const raw = await provider.generateText(
-                    buildReplyPrompt(prompt, getTimeContext(), '', '', false),
+                    buildReplyPrompt(prompt, getTimeContext(), '', '', false, ctx.cloneContext),
                     systemInst, { temperature: 0.7 }
                   );
                   const { cleanText } = extractKnowledgeAndClean(raw);

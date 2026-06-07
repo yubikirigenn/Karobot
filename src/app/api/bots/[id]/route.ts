@@ -58,10 +58,19 @@ export async function PUT(
     const body = await request.json();
     const updateData: Record<string, unknown> = {};
 
+    // AIモード時のAPIキー必須化バリデーション
+    const isAiMode = body.postMode === 'AI' || (!body.postMode && bot.postMode === 'AI');
+    const isAiProvider = body.aiProvider !== 'NONE' || (!body.aiProvider && bot.aiProvider !== 'NONE');
+    if (isAiMode && isAiProvider) {
+      if (!body.aiApiKey && !bot.aiApiKeyEnc) {
+        return NextResponse.json({ error: 'AIモードを使用する場合、APIキーは必須です' }, { status: 400 });
+      }
+    }
+
     // 更新可能なフィールド
     const simpleFields = [
       'name', 'karotterUsername', 'postMode', 'aiProvider', 'aiModel',
-      'systemInstruction', 'postTemplates', 'replyTemplates',
+      'cloneTargetUsername', 'systemInstruction', 'postTemplates', 'replyTemplates',
       'mentionSystemInstruction', 'mentionReplyTemplates',
       'probabilities', 'features', 'blockedUsers',
       'autoPostMinInterval', 'autoPostPaceMultiplier', 'autoPostMaxInterval',

@@ -21,6 +21,7 @@ export default function BotDetailPage({ params }: { params: Promise<{ id: string
   const [aiProvider, setAiProvider] = useState<AiProviderType>('GEMINI');
   const [aiApiKey, setAiApiKey] = useState('');
   const [aiModel, setAiModel] = useState('gemini-3.1-flash-lite');
+  const [cloneTargetUsername, setCloneTargetUsername] = useState('');
   const [systemInstruction, setSystemInstruction] = useState('');
   const [postTemplates, setPostTemplates] = useState<string[]>(['']);
   const [replyTemplates, setReplyTemplates] = useState<string[]>(['']);
@@ -54,6 +55,7 @@ export default function BotDetailPage({ params }: { params: Promise<{ id: string
       setPostMode(bot.postMode);
       setAiProvider(bot.aiProvider);
       setAiModel(bot.aiModel);
+      setCloneTargetUsername(bot.cloneTargetUsername || '');
       setSystemInstruction(bot.systemInstruction || '');
       setPostTemplates(bot.postTemplates?.length > 0 ? bot.postTemplates : ['']);
       setReplyTemplates(bot.replyTemplates?.length > 0 ? bot.replyTemplates : ['']);
@@ -85,7 +87,9 @@ export default function BotDetailPage({ params }: { params: Promise<{ id: string
       const body: Record<string, unknown> = {
         name, karotterUsername, postMode,
         aiProvider: postMode === 'AI' ? aiProvider : 'NONE',
-        aiModel, systemInstruction,
+        aiModel, 
+        cloneTargetUsername: postMode === 'AI' && cloneTargetUsername.trim() !== '' ? cloneTargetUsername.trim() : null,
+        systemInstruction,
         postTemplates: postTemplates.filter(t => t.trim() !== ''),
         replyTemplates: replyTemplates.filter(t => t.trim() !== ''),
         probabilities: probs, features,
@@ -241,6 +245,12 @@ export default function BotDetailPage({ params }: { params: Promise<{ id: string
                   <div className="form-group">
                     <label className="label">モデル名</label>
                     <input type="text" className="input-field" value={aiModel} onChange={e => setAiModel(e.target.value)} />
+                  </div>
+                  <div className="form-group">
+                    <label className="label">口調クローン対象（ユーザーID）</label>
+                    <input type="text" className="input-field" placeholder="例: yudetamago"
+                      value={cloneTargetUsername} onChange={e => setCloneTargetUsername(e.target.value)} />
+                    <p className="label-hint">※指定したユーザーの直近の投稿から文の傾向や性格を読み取り反映します</p>
                   </div>
                   <div className="form-group">
                     <label className="label">キャラクター設定</label>

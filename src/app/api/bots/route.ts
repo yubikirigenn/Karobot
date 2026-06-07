@@ -46,6 +46,11 @@ export async function POST(request: NextRequest) {
       return NextResponse.json({ error: 'Bot名、Karotterユーザー名、パスワードは必須です' }, { status: 400 });
     }
 
+    // AIモード時のAPIキー必須化バリデーション
+    if (body.postMode === 'AI' && body.aiProvider !== 'NONE' && !body.aiApiKey) {
+      return NextResponse.json({ error: 'AIモードを使用する場合、APIキーは必須です' }, { status: 400 });
+    }
+
     // パスワードとAPIキーを暗号化
     const karotterPasswordEnc = encrypt(body.karotterPassword);
     const aiApiKeyEnc = body.aiApiKey ? encrypt(body.aiApiKey) : null;
@@ -68,6 +73,7 @@ export async function POST(request: NextRequest) {
         aiProvider: body.aiProvider || 'NONE',
         aiApiKeyEnc,
         aiModel: body.aiModel || 'gemini-3.1-flash-lite',
+        cloneTargetUsername: body.cloneTargetUsername || null,
         systemInstruction: body.systemInstruction || '',
         postTemplates: body.postTemplates || [],
         replyTemplates: body.replyTemplates || [],

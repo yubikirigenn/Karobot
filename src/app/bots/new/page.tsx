@@ -28,6 +28,7 @@ export default function NewBotPage() {
   const [aiProvider, setAiProvider] = useState<AiProviderType>('GEMINI');
   const [aiApiKey, setAiApiKey] = useState('');
   const [aiModel, setAiModel] = useState('gemini-3.1-flash-lite');
+  const [cloneTargetUsername, setCloneTargetUsername] = useState('');
   const [systemInstruction, setSystemInstruction] = useState(DEFAULT_SYSTEM_INSTRUCTION);
 
   // テンプレート
@@ -67,6 +68,12 @@ export default function NewBotPage() {
     setLoading(true);
 
     try {
+      if (postMode === 'AI' && aiProvider !== 'NONE' && !aiApiKey) {
+        setError('AIモードを使用する場合、APIキーは必須です');
+        setLoading(false);
+        return;
+      }
+
       const blockedUsers = blockedUsersText.split(',').map(s => s.trim()).filter(Boolean);
 
       const body = {
@@ -77,6 +84,7 @@ export default function NewBotPage() {
         aiProvider: postMode === 'AI' ? aiProvider : 'NONE',
         aiApiKey: postMode === 'AI' ? aiApiKey : undefined,
         aiModel: postMode === 'AI' ? aiModel : undefined,
+        cloneTargetUsername: postMode === 'AI' && cloneTargetUsername.trim() !== '' ? cloneTargetUsername.trim() : undefined,
         systemInstruction: postMode === 'AI' ? systemInstruction : '',
         mentionSystemInstruction: postMode === 'AI' ? mentionSystemInstruction : '',
         mentionReplyTemplates: mentionReplyTemplates.filter(t => t.trim() !== ''),
@@ -262,6 +270,13 @@ export default function NewBotPage() {
                     <label className="label" htmlFor="ai-model">モデル名</label>
                     <input id="ai-model" type="text" className="input-field"
                       value={aiModel} onChange={e => setAiModel(e.target.value)} />
+                  </div>
+                  <div className="form-group">
+                    <label className="label" htmlFor="clone-target-username">口調クローン対象（ユーザーID）</label>
+                    <input id="clone-target-username" type="text" className="input-field"
+                      placeholder="例: yudetamago"
+                      value={cloneTargetUsername} onChange={e => setCloneTargetUsername(e.target.value)} />
+                    <p className="label-hint">※指定したユーザーの直近の投稿から文の傾向や性格を読み取り反映します</p>
                   </div>
                   <div className="form-group">
                     <label className="label" htmlFor="system-instruction">キャラクター設定（System Instruction）</label>

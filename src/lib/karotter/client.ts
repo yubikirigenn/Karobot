@@ -119,6 +119,14 @@ export class KarotterClient {
     }
   }
 
+  /**
+   * 特定のユーザーの直近の投稿一覧を取得する (口調クローン用)
+   */
+  async getUserPosts(username: string, limit = 10): Promise<{ ok: boolean; data: any }> {
+    const res = await this.request('GET', `/users/${username}/posts?page=1&limit=${limit}`);
+    return { ok: res.ok, data: res.data };
+  }
+
   /** 画像URLのフルパスを取得 */
   static resolveImageUrl(url: string): string {
     if (url.startsWith('/')) return `${KAROTTER_IMAGE_BASE}${url}`;

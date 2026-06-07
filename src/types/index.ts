@@ -44,6 +44,7 @@ export interface BotCreateRequest {
   aiProvider: AiProviderType;
   aiApiKey?: string;
   aiModel?: string;
+  cloneTargetUsername?: string;
   systemInstruction?: string;
   postTemplates?: string[];
   replyTemplates?: string[];
@@ -64,6 +65,7 @@ export interface BotSummary {
   karotterUsername: string;
   postMode: PostMode;
   aiProvider: AiProviderType;
+  cloneTargetUsername: string | null;
   status: BotStatus;
   lastExecutedAt: string | null;
   createdAt: string;

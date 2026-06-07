@@ -168,8 +168,9 @@ export function calculateTlPace(
  */
 export function getActivityMultiplier(): number {
   const now = new Date();
-  const h = now.getHours();
-  const m = now.getMinutes();
+  const jstNow = new Date(now.getTime() + 9 * 60 * 60 * 1000);
+  const h = jstNow.getUTCHours();
+  const m = jstNow.getUTCMinutes();
 
   if (h >= 23 || h < 3) return 0.1;
   if (h >= 3 && h < 6) {

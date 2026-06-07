@@ -257,7 +257,6 @@ async function executeNotifications(ctx: BotContext): Promise<void> {
       if (classified.type === 'ignore') continue;
       if (seenIds.has(classified.postId)) continue;
       if (classified.authorUsername.toLowerCase() === bot.karotterUsername.toLowerCase()) continue;
-      if (classified.authorUsername.toLowerCase().includes('bot')) continue;
       if (blockedUsers.map(u => u.toLowerCase()).includes(classified.authorUsername.toLowerCase())) continue;
 
       // フォローバック
@@ -336,6 +335,7 @@ async function executeNotifications(ctx: BotContext): Promise<void> {
             if (newId) {
               actions.push(`${actionType}: @${classified.authorUsername} → ${replyText.slice(0, 50)}`);
               await markSeen(botId, newId, 'AI_POSTED');
+              await markSeen(botId, classified.postId, 'SEEN');
               await logAction(botId, actionType, `@${classified.authorUsername}に返信: ${replyText.slice(0, 200)}`, true, classified.postId, newId);
             }
           }

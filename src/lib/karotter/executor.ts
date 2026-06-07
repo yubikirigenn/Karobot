@@ -301,6 +301,7 @@ async function executeNotifications(ctx: BotContext): Promise<void> {
           const threadKey = `${classified.authorUsername}_${rootId}`;
           const history = threadMem[threadKey]?.conversations?.join('\n') || '';
 
+          const prompt = buildReplyPrompt(cleanContent, getTimeContext(), history, quoteChain, classified.isQuote);
           let raw: string;
           try {
             raw = await provider.generateWithImages(prompt, classified.mediaUrls, effectiveSystemInst, { temperature: 0.7 });

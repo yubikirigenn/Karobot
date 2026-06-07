@@ -39,7 +39,8 @@ export async function GET(
         hasKarotterPassword: !!karotterPasswordEnc,
       },
     });
-  } catch {
+  } catch (e) {
+    console.error('GET Bot error:', e);
     return NextResponse.json({ error: '認証が必要です' }, { status: 401 });
   }
 }

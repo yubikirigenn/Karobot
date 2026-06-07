@@ -8,7 +8,9 @@ const client = new Client({
 async function main() {
   await client.connect();
   const res = await client.query(`
-    SELECT * FROM bot_logs ORDER BY "createdAt" DESC LIMIT 5
+    SELECT * FROM bot_logs 
+    ORDER BY "createdAt" DESC 
+    LIMIT 10
   `);
   for (const row of res.rows) {
     console.log(row);

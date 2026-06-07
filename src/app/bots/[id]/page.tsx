@@ -27,14 +27,14 @@ export default function BotDetailPage({ params }: { params: Promise<{ id: string
   const [probs, setProbs] = useState<Probabilities>({ like: 0.02, rekarot: 0, quote: 0.025, reply: 0.03, react: 0.03 });
   const [features, setFeatures] = useState<BotFeatures>({
     autoPost: true, like: true, rekarot: false, quoteRekarot: true,
-    reply: true, reaction: true, followBack: true, notificationReply: true, mentionReaction: true, selfLearning: true,
+    reply: true, reaction: true, followBack: true, notificationReply: true, mentionReaction: true, selfLearning: true, nightMode: true,
   });
   const [autoPostMode, setAutoPostMode] = useState<'DYNAMIC_PACE' | 'FIXED_INTERVAL' | 'SPECIFIC_TIMES'>('DYNAMIC_PACE');
-  const [fixedIntervalMinutes, setFixedIntervalMinutes] = useState(60);
+  const [fixedIntervalMinutes, setFixedIntervalMinutes] = useState<number | ''>(60);
   const [specificTimes, setSpecificTimes] = useState<string[]>(['12:00']);
-  const [minInterval, setMinInterval] = useState(30);
-  const [paceMultiplier, setPaceMultiplier] = useState(4.7);
-  const [maxInterval, setMaxInterval] = useState(3600);
+  const [minInterval, setMinInterval] = useState<number | ''>(30);
+  const [paceMultiplier, setPaceMultiplier] = useState<number | ''>(4.7);
+  const [maxInterval, setMaxInterval] = useState<number | ''>(3600);
   const [blockedUsersText, setBlockedUsersText] = useState('');
   const [mentionSystemInstruction, setMentionSystemInstruction] = useState('');
   const [mentionReplyTemplates, setMentionReplyTemplates] = useState<string[]>(['']);
@@ -84,8 +84,8 @@ export default function BotDetailPage({ params }: { params: Promise<{ id: string
         blockedUsers: blockedUsersText.split(',').map(s => s.trim()).filter(Boolean),
         mentionSystemInstruction,
         mentionReplyTemplates: mentionReplyTemplates.filter(t => t.trim() !== ''),
-        autoPostMinInterval: minInterval, autoPostPaceMultiplier: paceMultiplier, autoPostMaxInterval: maxInterval,
-        autoPostMode, fixedIntervalMinutes, specificTimes,
+        autoPostMinInterval: Number(minInterval) || 30, autoPostPaceMultiplier: Number(paceMultiplier) || 4.7, autoPostMaxInterval: Number(maxInterval) || 3600,
+        autoPostMode, fixedIntervalMinutes: Math.max(5, Number(fixedIntervalMinutes) || 5), specificTimes,
       };
       if (karotterPassword) body.karotterPassword = karotterPassword;
       if (aiApiKey) body.aiApiKey = aiApiKey;
@@ -310,6 +310,7 @@ export default function BotDetailPage({ params }: { params: Promise<{ id: string
                 {featureToggle('通知自動返信', 'notificationReply')}
                 {featureToggle('メンション反応', 'mentionReaction')}
                 {featureToggle('AI自己学習', 'selfLearning')}
+                {featureToggle('深夜おやすみモード', 'nightMode')}
               </div>
 
               {/* メンション反応の詳細設定 */}
@@ -403,15 +404,15 @@ export default function BotDetailPage({ params }: { params: Promise<{ id: string
                 <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr 1fr', gap: '16px', borderTop: '1px solid var(--color-border)', paddingTop: '20px' }}>
                   <div className="form-group">
                     <label className="label">最小（秒）</label>
-                    <input type="number" className="input-field" value={minInterval} onChange={e => setMinInterval(parseInt(e.target.value) || 30)} />
+                    <input type="number" className="input-field" value={minInterval} onChange={e => setMinInterval(e.target.value === '' ? '' : Number(e.target.value))} />
                   </div>
                   <div className="form-group">
                     <label className="label">最大（秒）</label>
-                    <input type="number" className="input-field" value={maxInterval} onChange={e => setMaxInterval(parseInt(e.target.value) || 3600)} />
+                    <input type="number" className="input-field" value={maxInterval} onChange={e => setMaxInterval(e.target.value === '' ? '' : Number(e.target.value))} />
                   </div>
                   <div className="form-group">
                     <label className="label">倍率</label>
-                    <input type="number" className="input-field" step="0.1" value={paceMultiplier} onChange={e => setPaceMultiplier(parseFloat(e.target.value) || 4.7)} />
+                    <input type="number" className="input-field" step="0.1" value={paceMultiplier} onChange={e => setPaceMultiplier(e.target.value === '' ? '' : Number(e.target.value))} />
                   </div>
                 </div>
               )}
@@ -422,7 +423,7 @@ export default function BotDetailPage({ params }: { params: Promise<{ id: string
                     <label className="label">投稿間隔（分）</label>
                     <div style={{ display: 'flex', alignItems: 'center', gap: '12px' }}>
                       <input type="number" className="input-field" style={{ maxWidth: '120px' }}
-                        value={fixedIntervalMinutes} onChange={e => setFixedIntervalMinutes(parseInt(e.target.value) || 5)} min={5} />
+                        value={fixedIntervalMinutes} onChange={e => setFixedIntervalMinutes(e.target.value === '' ? '' : Number(e.target.value))} min={5} />
                       <span className="text-muted">分ごとに投稿</span>
                     </div>
                     <p className="label-hint">※システムの仕様上、最短は「5分間隔」となります。</p>

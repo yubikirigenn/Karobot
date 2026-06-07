@@ -32,6 +32,7 @@ export interface BotFeatures {
   notificationReply: boolean;
   mentionReaction: boolean;
   selfLearning: boolean;
+  nightMode: boolean;
 }
 
 // --- Bot作成/更新リクエスト ---

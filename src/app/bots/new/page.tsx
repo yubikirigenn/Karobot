@@ -10,7 +10,7 @@ import { DEFAULT_SYSTEM_INSTRUCTION } from '@/lib/ai/prompts';
 const defaultProbs: Probabilities = { like: 0.02, rekarot: 0, quote: 0.025, reply: 0.03, react: 0.03 };
 const defaultFeatures: BotFeatures = {
   autoPost: true, like: true, rekarot: false, quoteRekarot: true,
-  reply: true, reaction: true, followBack: true, notificationReply: true, mentionReaction: true, selfLearning: true,
+  reply: true, reaction: true, followBack: true, notificationReply: true, mentionReaction: true, selfLearning: true, nightMode: true,
 };
 
 export default function NewBotPage() {
@@ -46,11 +46,11 @@ export default function NewBotPage() {
 
   // 間隔設定
   const [autoPostMode, setAutoPostMode] = useState<'DYNAMIC_PACE' | 'FIXED_INTERVAL' | 'SPECIFIC_TIMES'>('DYNAMIC_PACE');
-  const [fixedIntervalMinutes, setFixedIntervalMinutes] = useState(60);
+  const [fixedIntervalMinutes, setFixedIntervalMinutes] = useState<number | ''>(60);
   const [specificTimes, setSpecificTimes] = useState<string[]>(['12:00']);
-  const [minInterval, setMinInterval] = useState(30);
-  const [paceMultiplier, setPaceMultiplier] = useState(4.7);
-  const [maxInterval, setMaxInterval] = useState(3600);
+  const [minInterval, setMinInterval] = useState<number | ''>(30);
+  const [paceMultiplier, setPaceMultiplier] = useState<number | ''>(4.7);
+  const [maxInterval, setMaxInterval] = useState<number | ''>(3600);
 
   // ブロックリスト
   const [blockedUsersText, setBlockedUsersText] = useState('');
@@ -85,11 +85,11 @@ export default function NewBotPage() {
         probabilities: probs,
         features,
         blockedUsers,
-        autoPostMinInterval: minInterval,
-        autoPostPaceMultiplier: paceMultiplier,
-        autoPostMaxInterval: maxInterval,
+        autoPostMinInterval: Number(minInterval) || 30,
+        autoPostPaceMultiplier: Number(paceMultiplier) || 4.7,
+        autoPostMaxInterval: Number(maxInterval) || 3600,
         autoPostMode,
-        fixedIntervalMinutes,
+        fixedIntervalMinutes: Math.max(5, Number(fixedIntervalMinutes) || 5),
         specificTimes,
       };
 
@@ -343,6 +343,7 @@ export default function NewBotPage() {
                 {featureToggle('通知自動返信', 'notificationReply')}
                 {featureToggle('メンション反応', 'mentionReaction')}
                 {featureToggle('AI自己学習', 'selfLearning')}
+                {featureToggle('深夜おやすみモード', 'nightMode')}
               </div>
 
               {/* メンション反応の詳細設定 */}
@@ -439,17 +440,17 @@ export default function NewBotPage() {
                   <div className="form-group">
                     <label className="label" htmlFor="min-interval">最小間隔（秒）</label>
                     <input id="min-interval" type="number" className="input-field"
-                      value={minInterval} onChange={e => setMinInterval(parseInt(e.target.value) || 30)} min={10} />
+                      value={minInterval} onChange={e => setMinInterval(e.target.value === '' ? '' : Number(e.target.value))} min={10} />
                   </div>
                   <div className="form-group">
                     <label className="label" htmlFor="max-interval">最大間隔（秒）</label>
                     <input id="max-interval" type="number" className="input-field"
-                      value={maxInterval} onChange={e => setMaxInterval(parseInt(e.target.value) || 3600)} min={60} />
+                      value={maxInterval} onChange={e => setMaxInterval(e.target.value === '' ? '' : Number(e.target.value))} min={60} />
                   </div>
                   <div className="form-group">
                     <label className="label" htmlFor="pace-mult">ペース倍率</label>
                     <input id="pace-mult" type="number" className="input-field" step="0.1"
-                      value={paceMultiplier} onChange={e => setPaceMultiplier(parseFloat(e.target.value) || 4.7)} min={0.1} />
+                      value={paceMultiplier} onChange={e => setPaceMultiplier(e.target.value === '' ? '' : Number(e.target.value))} min={0.1} />
                   </div>
                 </div>
               )}
@@ -460,7 +461,7 @@ export default function NewBotPage() {
                     <label className="label" htmlFor="fixed-interval">投稿間隔（分）</label>
                     <div style={{ display: 'flex', alignItems: 'center', gap: '12px' }}>
                       <input id="fixed-interval" type="number" className="input-field" style={{ maxWidth: '120px' }}
-                        value={fixedIntervalMinutes} onChange={e => setFixedIntervalMinutes(parseInt(e.target.value) || 5)} min={5} />
+                        value={fixedIntervalMinutes} onChange={e => setFixedIntervalMinutes(e.target.value === '' ? '' : Number(e.target.value))} min={5} />
                       <span className="text-muted">分ごとに投稿</span>
                     </div>
                     <p className="label-hint">※システムの仕様上、最短は「5分間隔」となります。</p>

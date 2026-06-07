@@ -241,7 +241,8 @@ async function executeAutoPost(ctx: BotContext, forceAutoPost: boolean): Promise
 async function executeNotifications(ctx: BotContext): Promise<void> {
   const { bot, client, provider, features, blockedUsers, seenIds, aiPostedIds, systemInst, mentionSystemInst, actions, errors } = ctx;
   const botId = bot.id;
-  const actMult = getActivityMultiplier();
+  const botFeatures = features as unknown as import('@/types').BotFeatures;
+  const actMult = getActivityMultiplier(botFeatures?.nightMode !== false);
 
   // メンション反応用テンプレートを取得
   const mentionReplyTemplates = ((bot as Record<string, unknown>).mentionReplyTemplates as string[]) || [];

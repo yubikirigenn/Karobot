@@ -166,7 +166,9 @@ export function calculateTlPace(
 /**
  * アクティビティ倍率（深夜は低く）
  */
-export function getActivityMultiplier(): number {
+export function getActivityMultiplier(nightModeEnabled: boolean = true): number {
+  if (!nightModeEnabled) return 1.0;
+
   const now = new Date();
   const jstNow = new Date(now.getTime() + 9 * 60 * 60 * 1000);
   const h = jstNow.getUTCHours();

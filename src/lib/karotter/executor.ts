@@ -122,12 +122,12 @@ export async function executeBotCycle(botId: string, forceAutoPost: boolean = fa
 
   // === Phase 1: 自発カロート ===
   let didAutoPost = false;
-  if (features.autoPost) {
+  if (features.autoPost !== false) {
     didAutoPost = await executeAutoPost(ctx, forceAutoPost);
   }
 
   // === Phase 2: 通知処理（メンション反応含む） ===
-  if (features.notificationReply) {
+  if (features.notificationReply !== false) {
     await executeNotifications(ctx);
   }
 
@@ -306,7 +306,7 @@ async function executeNotifications(ctx: BotContext): Promise<void> {
           const raw = await provider.generateWithImages(prompt, classified.mediaUrls, effectiveSystemInst, { temperature: 0.7 });
           const { cleanText, knowledge } = extractKnowledgeAndClean(raw);
 
-          if (knowledge && features.selfLearning) {
+          if (knowledge && features.selfLearning !== false) {
             await updateKnowledge(botId, knowledge);
           }
 
@@ -382,8 +382,11 @@ async function executeRandomActions(ctx: BotContext): Promise<void> {
 
       // 対応する機能がOFFなら何もしない
       const featureMap: Record<string, boolean> = {
-        LIKE: features.like, REKAROT: features.rekarot, QUOTE: features.quoteRekarot,
-        REACT: features.reaction, REPLY: features.reply,
+        LIKE: features.like !== false,
+        REKAROT: features.rekarot !== false,
+        QUOTE: features.quoteRekarot !== false,
+        REACT: features.reaction !== false,
+        REPLY: features.reply !== false,
       };
       if (!featureMap[actionType]) {
         // スキップ
@@ -401,7 +404,7 @@ async function executeRandomActions(ctx: BotContext): Promise<void> {
         }).slice(0, 10);
 
         if (candidates.length > 0) {
-          if (actionType === 'LIKE' && bot.postMode === 'AI') {
+          if (actionType === 'LIKE' && features.like !== false && bot.postMode === 'AI') {
             const candidateInfos = candidates.map(c => ({
               id: String(c.id), author: c.author?.username || 'unknown', content: String(c.content || '').slice(0, 100),
             }));
@@ -416,7 +419,7 @@ async function executeRandomActions(ctx: BotContext): Promise<void> {
                 await markSeen(botId, id, 'SEEN');
               }
             }
-          } else if (actionType === 'LIKE') {
+          } else if (actionType === 'LIKE' && features.like !== false) {
             // テンプレートモード: ランダムにいいね
             const target = candidates[Math.floor(Math.random() * candidates.length)];
             const tid = String(target.id);
@@ -424,7 +427,7 @@ async function executeRandomActions(ctx: BotContext): Promise<void> {
             actions.push(`いいね(ランダム): ID ${tid}`);
             await logAction(botId, 'LIKE', `投稿 ${tid} にいいね`, true, tid);
             await markSeen(botId, tid, 'SEEN');
-          } else if (actionType === 'REACT') {
+          } else if (actionType === 'REACT' && features.reaction !== false) {
             const target = candidates[Math.floor(Math.random() * candidates.length)];
             const tid = String(target.id);
             let emoji = '❤️';

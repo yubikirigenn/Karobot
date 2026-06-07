@@ -7,7 +7,8 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { requireAuth } from '@/lib/auth';
 import { prisma } from '@/lib/prisma';
-import { encrypt } from '@/lib/encryption';
+import { encrypt, decrypt } from '@/lib/encryption';
+import { KarotterClient } from '@/lib/karotter/client';
 
 export const dynamic = 'force-dynamic';
 
@@ -86,6 +87,16 @@ export async function PUT(
     // APIキー更新
     if (body.aiApiKey) {
       updateData.aiApiKeyEnc = encrypt(body.aiApiKey);
+    }
+
+    // ログインテスト
+    const testUsername = (updateData.karotterUsername as string) || bot.karotterUsername;
+    const testPassword = body.karotterPassword || decrypt(bot.karotterPasswordEnc);
+    const client = new KarotterClient({ username: testUsername.replace(/^@/, ''), password: testPassword });
+    try {
+      await client.login();
+    } catch (e) {
+      return NextResponse.json({ error: 'Karotterのログインに失敗しました。ユーザーIDとパスワードを確認してください。' }, { status: 400 });
     }
 
     const updated = await prisma.bot.update({

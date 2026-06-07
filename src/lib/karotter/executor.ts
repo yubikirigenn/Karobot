@@ -306,7 +306,7 @@ async function executeNotifications(ctx: BotContext): Promise<void> {
             raw = await provider.generateWithImages(prompt, classified.mediaUrls, effectiveSystemInst, { temperature: 0.7 });
           } catch (e) {
             actions.push(`返信エラー: @${classified.authorUsername}`);
-            await logAction(botId, 'ERROR', `AI生成エラー (@${classified.authorUsername}への返信): ${e}`, false);
+            await logAction(botId, 'ERROR', 'AI生成エラー (@' + classified.authorUsername + 'への返信): ' + e, false);
             await markSeen(botId, classified.postId, 'SEEN'); // エラーでも既読にして無限ループを防ぐ
             continue;
           }
@@ -336,7 +336,7 @@ async function executeNotifications(ctx: BotContext): Promise<void> {
               actions.push(`${actionType}: @${classified.authorUsername} → ${replyText.slice(0, 50)}`);
               await markSeen(botId, newId, 'AI_POSTED');
               await markSeen(botId, classified.postId, 'SEEN');
-              await logAction(botId, actionType, `@${classified.authorUsername}に返信: ${replyText.slice(0, 200)}`, true, classified.postId, newId);
+              await logAction(botId, actionType, '@' + classified.authorUsername + 'に返信: ' + replyText.slice(0, 200), true, classified.postId, newId);
             }
           }
         } else {
@@ -354,7 +354,7 @@ async function executeNotifications(ctx: BotContext): Promise<void> {
             const newId = await postKaroto(client, replyText, { parentId: classified.postId });
             if (newId) {
               actions.push(`REPLY(テンプレート): @${classified.authorUsername}`);
-              await logAction(botId, 'REPLY', `テンプレート返信: ${replyText.slice(0, 200)}`, true, classified.postId, newId);
+              await logAction(botId, 'REPLY', 'テンプレート返信: ' + replyText.slice(0, 200), true, classified.postId, newId);
             }
           }
         }

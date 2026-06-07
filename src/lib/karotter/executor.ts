@@ -117,12 +117,21 @@ export async function executeBotCycle(botId: string, forceAutoPost: boolean = fa
   let cloneContext: string | undefined = undefined;
   if (bot.postMode === 'AI' && bot.cloneTargetUsername) {
     try {
-      const cloneRes = await client.getUserPosts(bot.cloneTargetUsername, 5);
-      if (cloneRes.ok && Array.isArray(cloneRes.data)) {
-        cloneContext = cloneRes.data
-          .filter((p: any) => p && p.content)
-          .map((p: any) => `- ${p.content.slice(0, 100)}`)
-          .join('\n');
+      const cloneRes = await client.getUserPosts(bot.cloneTargetUsername, 8);
+      if (cloneRes.ok && cloneRes.data) {
+        let postsArray: any[] = [];
+        if (Array.isArray(cloneRes.data)) {
+          postsArray = cloneRes.data;
+        } else if (typeof cloneRes.data === 'object' && Array.isArray((cloneRes.data as any).posts)) {
+          postsArray = (cloneRes.data as any).posts;
+        }
+
+        if (postsArray.length > 0) {
+          cloneContext = postsArray
+            .filter((p: any) => p && p.content)
+            .map((p: any) => `- ${p.content.slice(0, 200)}`)
+            .join('\n');
+        }
       }
     } catch (e) {
       console.error(`口調クローン取得エラー: ${e}`);

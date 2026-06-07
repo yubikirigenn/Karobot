@@ -42,7 +42,12 @@ export default function BotDetailPage({ params }: { params: Promise<{ id: string
   const fetchBot = useCallback(async () => {
     try {
       const res = await fetch(`/api/bots/${id}`, { cache: 'no-store' });
-      if (!res.ok) { router.push('/dashboard'); return; }
+      if (!res.ok) {
+        const text = await res.text();
+        setError(`Botの取得に失敗しました: ${res.status} ${text}`);
+        setLoading(false);
+        return;
+      }
       const { bot } = await res.json();
       setName(bot.name);
       setKarotterUsername(bot.karotterUsername);
@@ -63,7 +68,10 @@ export default function BotDetailPage({ params }: { params: Promise<{ id: string
       setBlockedUsersText((bot.blockedUsers || []).join(', '));
       setMentionSystemInstruction(bot.mentionSystemInstruction || '');
       setMentionReplyTemplates(bot.mentionReplyTemplates?.length > 0 ? bot.mentionReplyTemplates : ['']);
-    } catch { router.push('/dashboard'); }
+    } catch (e) {
+      setError(`通信エラー: ${e}`);
+      setLoading(false);
+    }
     setLoading(false);
   }, [id, router]); // eslint-disable-line react-hooks/exhaustive-deps
 

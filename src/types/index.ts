@@ -6,7 +6,7 @@
 export type PostMode = 'AI' | 'FIXED_TEMPLATE' | 'RANDOM_TEMPLATE';
 
 // --- AIプロバイダー ---
-export type AiProviderType = 'GEMINI' | 'GROQ_QWEN' | 'DEEPSEEK' | 'OPENAI_GPT' | 'NONE';
+export type AiProviderType = 'GEMINI' | 'GROQ_QWEN' | 'DEEPSEEK' | 'OPENAI_GPT' | 'OPENROUTER' | 'NONE';
 
 // --- Bot稼働状態 ---
 export type BotStatus = 'ACTIVE' | 'PAUSED';
@@ -141,6 +141,20 @@ export const AI_PROVIDERS: AiProviderInfo[] = [
     description: '高品質 (OpenAI API)',
     defaultModel: 'gpt-5.4-nano',
     endpoint: 'api.openai.com',
+  },
+  {
+    id: 'OPENROUTER',
+    name: 'Gemma 2 9B (OpenRouter Free)',
+    description: 'OpenRouter (無料モデル)',
+    defaultModel: 'google/gemma-2-9b-it:free',
+    endpoint: 'openrouter.ai',
+  },
+  {
+    id: 'NONE',
+    name: 'なし',
+    description: 'AIを使用しない',
+    defaultModel: '',
+    endpoint: '',
   },
 ];
 

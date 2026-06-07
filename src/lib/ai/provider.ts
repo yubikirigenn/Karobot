@@ -6,6 +6,7 @@ import { GeminiProvider } from './gemini';
 import { GroqQwenProvider } from './groq';
 import { DeepSeekProvider } from './deepseek';
 import { OpenAIGptProvider } from './openai';
+import { OpenRouterProvider } from './openrouter';
 import { TemplateProvider } from './template';
 
 export interface AiGenerateOptions {
@@ -54,6 +55,8 @@ export function createProvider(
       return new DeepSeekProvider(apiKey, model);
     case 'OPENAI_GPT':
       return new OpenAIGptProvider(apiKey, model);
+    case 'OPENROUTER':
+      return new OpenRouterProvider(apiKey, model);
     case 'NONE':
       if (!templates) {
         throw new Error('Template configuration required for NONE provider');

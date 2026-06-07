@@ -9,7 +9,7 @@ export class OpenRouterProvider implements AiProvider {
   private apiKey: string;
   private model: string;
 
-  constructor(apiKey: string, model: string = 'google/gemma-2-9b-it:free') {
+  constructor(apiKey: string, model: string = 'google/gemma-4-31b-it:free') {
     this.apiKey = apiKey;
     this.model = model;
   }

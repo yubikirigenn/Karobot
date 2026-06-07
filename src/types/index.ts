@@ -144,9 +144,9 @@ export const AI_PROVIDERS: AiProviderInfo[] = [
   },
   {
     id: 'OPENROUTER',
-    name: 'Gemma 2 9B (OpenRouter Free)',
+    name: 'Gemma 4 31B (OpenRouter Free)',
     description: 'OpenRouter (無料モデル)',
-    defaultModel: 'google/gemma-2-9b-it:free',
+    defaultModel: 'google/gemma-4-31b-it:free',
     endpoint: 'openrouter.ai',
   },
   {

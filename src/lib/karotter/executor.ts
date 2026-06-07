@@ -126,10 +126,8 @@ export async function executeBotCycle(botId: string, forceAutoPost: boolean = fa
     didAutoPost = await executeAutoPost(ctx, forceAutoPost);
   }
 
-  // === Phase 2: 通知処理（メンション反応含む） ===
-  if (features.notificationReply !== false) {
-    await executeNotifications(ctx);
-  }
+  // === Phase 2: 通知処理（メンション反応、フォローバック含む） ===
+  await executeNotifications(ctx);
 
   // === Phase 3: ランダムアクション ===
   // 定期投稿モード（FIXED_INTERVAL / SPECIFIC_TIMES）の場合、

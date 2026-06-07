@@ -64,16 +64,14 @@ export class GroqQwenProvider implements AiProvider {
       });
 
       if (!res.ok) {
-        console.error(`Groq API error: ${res.status} ${await res.text()}`);
-        return 'SKIP';
+        throw new Error(`Groq API error: ${res.status}`);
       }
 
       const data = await res.json();
       const text = data?.choices?.[0]?.message?.content?.trim();
       return text || 'SKIP';
     } catch (e) {
-      console.error(`Groq Exception: ${e}`);
-      return 'SKIP';
+      throw new Error(`Groq Exception: ${e}`);
     }
   }
 }

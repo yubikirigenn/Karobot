@@ -302,8 +302,16 @@ async function executeNotifications(ctx: BotContext): Promise<void> {
           const threadKey = `${classified.authorUsername}_${rootId}`;
           const history = threadMem[threadKey]?.conversations?.join('\n') || '';
 
-          const prompt = buildReplyPrompt(cleanContent, getTimeContext(), history, quoteChain, classified.isQuote);
-          const raw = await provider.generateWithImages(prompt, classified.mediaUrls, effectiveSystemInst, { temperature: 0.7 });
+          let raw: string;
+          try {
+            raw = await provider.generateWithImages(prompt, classified.mediaUrls, effectiveSystemInst, { temperature: 0.7 });
+          } catch (e) {
+            actions.push(`返信エラー: @${classified.authorUsername}`);
+            await logAction(botId, 'ERROR', `AI生成エラー (@${classified.authorUsername}への返信): ${e}`, false);
+            await markSeen(botId, classified.postId, 'SEEN'); // エラーでも既読にして無限ループを防ぐ
+            continue;
+          }
+
           const { cleanText, knowledge } = extractKnowledgeAndClean(raw);
 
           if (knowledge && features.selfLearning !== false) {

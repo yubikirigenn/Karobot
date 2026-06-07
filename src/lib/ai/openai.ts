@@ -78,16 +78,14 @@ export class OpenAIGptProvider implements AiProvider {
       });
 
       if (!res.ok) {
-        console.error(`OpenAI API error: ${res.status} ${await res.text()}`);
-        return 'SKIP';
+        throw new Error(`OpenAI API error: ${res.status}`);
       }
 
       const data = await res.json();
       const text = data?.choices?.[0]?.message?.content?.trim();
       return text || 'SKIP';
     } catch (e) {
-      console.error(`OpenAI Exception: ${e}`);
-      return 'SKIP';
+      throw new Error(`OpenAI Exception: ${e}`);
     }
   }
 }

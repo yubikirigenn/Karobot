@@ -83,15 +83,15 @@ export class GeminiProvider implements AiProvider {
 
       if (!res.ok) {
         console.error(`Gemini API error: ${res.status} ${await res.text()}`);
-        return 'SKIP';
+        throw new Error(`Gemini API エラー: ${res.status}`);
       }
 
       const data = await res.json();
       const text = data?.candidates?.[0]?.content?.parts?.[0]?.text?.trim();
       return text || 'SKIP';
     } catch (e) {
-      console.error(`Gemini Exception: ${e}`);
-      return 'SKIP';
+      console.error(`Gemini API error: ${e}`);
+      throw new Error(`Gemini API エラー: ${e}`);
     }
   }
 }

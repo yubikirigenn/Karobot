@@ -73,16 +73,19 @@ export class KarotterClient {
   async request<T = unknown>(
     method: string,
     endpoint: string,
-    options?: { body?: unknown; timeout?: number }
+    options?: { body?: unknown | FormData; timeout?: number }
   ): Promise<{ ok: boolean; status: number; data: T | null }> {
     const url = `${KAROTTER_INTERNAL_URL}${endpoint}`;
     const timeout = options?.timeout ?? 20000;
 
     const doRequest = async (): Promise<Response> => {
+      const isFormData = options?.body instanceof FormData;
       const headers: Record<string, string> = {
-        'Content-Type': 'application/json',
         'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36 KaroBot/1.0',
       };
+      if (!isFormData) {
+        headers['Content-Type'] = 'application/json';
+      }
       if (this.accessToken) {
         headers['Authorization'] = `Bearer ${this.accessToken}`;
       }
@@ -90,7 +93,7 @@ export class KarotterClient {
       return fetch(url, {
         method,
         headers,
-        body: options?.body ? JSON.stringify(options.body) : undefined,
+        body: options?.body ? (isFormData ? options.body as FormData : JSON.stringify(options.body)) : undefined,
         signal: AbortSignal.timeout(timeout),
       });
     };

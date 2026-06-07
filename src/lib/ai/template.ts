@@ -5,14 +5,15 @@
 import type { AiProvider, AiGenerateOptions } from './provider';
 
 export class TemplateProvider implements AiProvider {
-  private postTemplates: string[];
-  private replyTemplates: string[];
+  private postTemplates: any[];
+  private replyTemplates: any[];
   private mode: 'fixed' | 'random';
   private currentIndex: number;
+  public lastSelectedMediaUrls: string[] = [];
 
   constructor(
-    postTemplates: string[],
-    replyTemplates: string[],
+    postTemplates: any[],
+    replyTemplates: any[],
     mode: 'fixed' | 'random',
     currentIndex: number = 0
   ) {
@@ -53,16 +54,27 @@ export class TemplateProvider implements AiProvider {
     return this.selectTemplate(this.replyTemplates);
   }
 
-  private selectTemplate(templates: string[]): string {
-    if (templates.length === 0) return 'SKIP';
+  private selectTemplate(templates: any[]): string {
+    if (templates.length === 0) {
+      this.lastSelectedMediaUrls = [];
+      return 'SKIP';
+    }
 
+    let chosen: any;
     if (this.mode === 'fixed') {
-      const text = templates[this.currentIndex % templates.length];
+      chosen = templates[this.currentIndex % templates.length];
       this.currentIndex++;
-      return this.expandVariables(text);
     } else {
       const randomIdx = Math.floor(Math.random() * templates.length);
-      return this.expandVariables(templates[randomIdx]);
+      chosen = templates[randomIdx];
+    }
+
+    if (typeof chosen === 'string') {
+      this.lastSelectedMediaUrls = [];
+      return this.expandVariables(chosen);
+    } else {
+      this.lastSelectedMediaUrls = chosen.mediaUrls || [];
+      return this.expandVariables(chosen.text || '');
     }
   }
 

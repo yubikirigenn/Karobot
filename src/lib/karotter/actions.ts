@@ -4,6 +4,8 @@
 // yudetamagobot.py から移植
 // ==========================================
 import { KarotterClient } from './client';
+import fs from 'fs/promises';
+import path from 'path';
 
 /**
  * カロート（投稿）を送信
@@ -11,7 +13,7 @@ import { KarotterClient } from './client';
 export async function postKaroto(
   client: KarotterClient,
   text: string,
-  options?: { parentId?: string; quoteId?: string }
+  options?: { parentId?: string; quoteId?: string; mediaUrls?: string[] }
 ): Promise<string | null> {
   const payload: Record<string, unknown> = {
     content: text,
@@ -34,8 +36,39 @@ export async function postKaroto(
     payload.type = 'QUOTE';
   }
 
+  let finalBody: unknown | FormData = payload;
+
+  if (options?.mediaUrls && options.mediaUrls.length > 0) {
+    const formData = new FormData();
+    Object.entries(payload).forEach(([key, value]) => {
+      formData.append(key, String(value));
+    });
+
+    for (const url of options.mediaUrls) {
+      if (url.startsWith('/uploads/')) {
+        const filePath = path.join(process.cwd(), 'public', url.replace(/\//g, path.sep));
+        try {
+          const buffer = await fs.readFile(filePath);
+          const ext = path.extname(filePath).toLowerCase();
+          let mimeType = 'image/jpeg';
+          if (ext === '.png') mimeType = 'image/png';
+          else if (ext === '.gif') mimeType = 'image/gif';
+          else if (ext === '.mp4') mimeType = 'video/mp4';
+          else if (ext === '.mov') mimeType = 'video/quicktime';
+          else if (ext === '.webp') mimeType = 'image/webp';
+          
+          const blob = new Blob([buffer], { type: mimeType });
+          formData.append('media', blob, path.basename(filePath));
+        } catch (err) {
+          console.error(`Failed to read media file ${filePath}`, err);
+        }
+      }
+    }
+    finalBody = formData;
+  }
+
   const res = await client.request<{ id?: string; post?: { id?: string } }>('POST', '/posts', {
-    body: payload,
+    body: finalBody,
   });
 
   if (res.ok && res.data) {

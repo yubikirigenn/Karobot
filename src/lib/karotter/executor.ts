@@ -224,6 +224,7 @@ async function executeAutoPost(ctx: BotContext, forceAutoPost: boolean): Promise
     const timeContext = getTimeContext();
 
     let postText: string;
+    let mediaUrls: string[] = [];
     if (bot.postMode === 'AI') {
       const prompt = buildAutoPostPrompt(tlContext, recentPosts, timeContext, ctx.cloneContext);
       const raw = await provider.generateText(prompt, systemInst, { temperature: 0.85 });
@@ -234,10 +235,13 @@ async function executeAutoPost(ctx: BotContext, forceAutoPost: boolean): Promise
       }
     } else {
       postText = await provider.generateText('', '', {});
+      if ((provider as any).lastSelectedMediaUrls) {
+        mediaUrls = (provider as any).lastSelectedMediaUrls;
+      }
     }
 
     if (postText && postText !== 'SKIP') {
-      const newId = await postKaroto(client, postText);
+      const newId = await postKaroto(client, postText, { mediaUrls });
       if (newId) {
         actions.push(`自発カロート: ${postText.slice(0, 50)}`);
         await markSeen(botId, newId, 'AI_POSTED');
@@ -374,16 +378,29 @@ async function executeNotifications(ctx: BotContext): Promise<void> {
           // テンプレートモード
           // メンション専用テンプレートがあればそちらを使用
           let replyText: string;
+          let mediaUrls: string[] = [];
+          
           if (mentionReplyTemplates.length > 0) {
             const idx = Math.floor(Math.random() * mentionReplyTemplates.length);
-            replyText = mentionReplyTemplates[idx];
+            const chosen = mentionReplyTemplates[idx];
+            if (typeof chosen === 'string') {
+              replyText = chosen;
+            } else {
+              replyText = (chosen as any).text || '';
+              mediaUrls = (chosen as any).mediaUrls || [];
+            }
+            // 変数展開
+            replyText = replyText.replace(/\{\{time\}\}/g, () => { const d = new Date(); return `${d.getHours()}:${String(d.getMinutes()).padStart(2, '0')}`; });
           } else {
             replyText = await provider.generateWithImages('', [], '', {});
+            if ((provider as any).lastSelectedMediaUrls) {
+              mediaUrls = (provider as any).lastSelectedMediaUrls;
+            }
           }
 
           if (replyText && replyText !== 'SKIP') {
             try {
-              const newId = await postKaroto(client, replyText, { parentId: classified.postId });
+              const newId = await postKaroto(client, replyText, { parentId: classified.postId, mediaUrls });
               if (newId) {
                 actions.push(`REPLY(テンプレート): @${classified.authorUsername}`);
                 await logAction(botId, 'REPLY', 'テンプレート返信: ' + replyText.slice(0, 200), true, classified.postId, newId);

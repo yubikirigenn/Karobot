@@ -4,7 +4,7 @@ import { useState } from 'react';
 import { useRouter } from 'next/navigation';
 import Link from 'next/link';
 import { AI_PROVIDERS } from '@/types';
-import type { PostMode, AiProviderType, Probabilities, BotFeatures } from '@/types';
+import type { PostMode, AiProviderType, Probabilities, BotFeatures, TemplateObj } from '@/types';
 import { DEFAULT_SYSTEM_INSTRUCTION } from '@/lib/ai/prompts';
 
 const defaultProbs: Probabilities = { like: 0.02, rekarot: 0, quote: 0.025, reply: 0.03, react: 0.03 };
@@ -32,12 +32,12 @@ export default function NewBotPage() {
   const [systemInstruction, setSystemInstruction] = useState(DEFAULT_SYSTEM_INSTRUCTION);
 
   // テンプレート
-  const [postTemplates, setPostTemplates] = useState<string[]>(['']);
-  const [replyTemplates, setReplyTemplates] = useState<string[]>(['']);
+  const [postTemplates, setPostTemplates] = useState<TemplateObj[]>([{ text: '', mediaUrls: [] }]);
+  const [replyTemplates, setReplyTemplates] = useState<TemplateObj[]>([{ text: '', mediaUrls: [] }]);
 
   // メンション反応設定
   const [mentionSystemInstruction, setMentionSystemInstruction] = useState('');
-  const [mentionReplyTemplates, setMentionReplyTemplates] = useState<string[]>(['']);
+  const [mentionReplyTemplates, setMentionReplyTemplates] = useState<TemplateObj[]>([{ text: '', mediaUrls: [] }]);
 
   // 確率
   const [probs, setProbs] = useState<Probabilities>(defaultProbs);
@@ -60,6 +60,37 @@ export default function NewBotPage() {
     setAiProvider(provider);
     const info = AI_PROVIDERS.find(p => p.id === provider);
     if (info) setAiModel(info.defaultModel);
+  };
+
+  const handleFileUpload = async (e: React.ChangeEvent<HTMLInputElement>, index: number, type: 'post' | 'reply' | 'mention') => {
+    if (!e.target.files || e.target.files.length === 0) return;
+    
+    const file = e.target.files[0];
+    const formData = new FormData();
+    formData.append('file', file);
+    
+    try {
+      const res = await fetch('/api/upload', {
+        method: 'POST',
+        body: formData,
+      });
+      if (res.ok) {
+        const { url } = await res.json();
+        
+        const updateState = (templates: TemplateObj[], setTemplates: any) => {
+          const newTemplates = [...templates];
+          if (!newTemplates[index].mediaUrls) newTemplates[index].mediaUrls = [];
+          newTemplates[index].mediaUrls!.push(url);
+          setTemplates(newTemplates);
+        };
+
+        if (type === 'post') updateState(postTemplates, setPostTemplates);
+        else if (type === 'reply') updateState(replyTemplates, setReplyTemplates);
+        else updateState(mentionReplyTemplates, setMentionReplyTemplates);
+      }
+    } catch (err) {
+      console.error('Upload failed', err);
+    }
   };
 
   const handleSubmit = async (e: React.FormEvent) => {
@@ -87,9 +118,9 @@ export default function NewBotPage() {
         cloneTargetUsername: postMode === 'AI' && cloneTargetUsername.trim() !== '' ? cloneTargetUsername.trim() : undefined,
         systemInstruction: postMode === 'AI' ? systemInstruction : '',
         mentionSystemInstruction: postMode === 'AI' ? mentionSystemInstruction : '',
-        mentionReplyTemplates: mentionReplyTemplates.filter(t => t.trim() !== ''),
-        postTemplates: postTemplates.filter(t => t.trim() !== ''),
-        replyTemplates: replyTemplates.filter(t => t.trim() !== ''),
+        mentionReplyTemplates: mentionReplyTemplates.filter(t => t.text.trim() !== '' || (t.mediaUrls && t.mediaUrls.length > 0)),
+        postTemplates: postTemplates.filter(t => t.text.trim() !== '' || (t.mediaUrls && t.mediaUrls.length > 0)),
+        replyTemplates: replyTemplates.filter(t => t.text.trim() !== '' || (t.mediaUrls && t.mediaUrls.length > 0)),
         probabilities: probs,
         features,
         blockedUsers,
@@ -294,22 +325,41 @@ export default function NewBotPage() {
                     <label className="label">投稿テンプレート</label>
                     <div style={{ display: 'flex', flexDirection: 'column', gap: '8px' }}>
                       {postTemplates.map((t, i) => (
-                        <div key={i} style={{ display: 'flex', gap: '8px', alignItems: 'flex-start' }}>
-                          <textarea className="input-field" rows={3} value={t} style={{ flex: 1 }}
-                            placeholder="投稿内容を入力..."
-                            onChange={e => {
-                              const newTemplates = [...postTemplates];
-                              newTemplates[i] = e.target.value;
-                              setPostTemplates(newTemplates);
-                            }} />
-                          <button type="button" className="btn btn-ghost" style={{ padding: '8px', color: 'var(--color-error)' }}
-                            onClick={() => setPostTemplates(postTemplates.filter((_, idx) => idx !== i))}>
-                            ✖
-                          </button>
+                        <div key={i} style={{ display: 'flex', gap: '8px', alignItems: 'flex-start', flexDirection: 'column', border: '1px solid var(--color-border)', padding: '8px', borderRadius: '8px' }}>
+                          <div style={{ display: 'flex', gap: '8px', width: '100%' }}>
+                            <textarea className="input-field" rows={3} value={t.text} style={{ flex: 1 }}
+                              placeholder="投稿内容を入力..."
+                              onChange={e => {
+                                const newTemplates = [...postTemplates];
+                                newTemplates[i].text = e.target.value;
+                                setPostTemplates(newTemplates);
+                              }} />
+                            <button type="button" className="btn btn-ghost" style={{ padding: '8px', color: 'var(--color-error)' }}
+                              onClick={() => setPostTemplates(postTemplates.filter((_, idx) => idx !== i))}>
+                              ✖
+                            </button>
+                          </div>
+                          <div style={{ display: 'flex', alignItems: 'center', gap: '8px', flexWrap: 'wrap' }}>
+                            <label className="btn btn-secondary text-sm" style={{ cursor: 'pointer' }}>
+                              📷 画像/動画を添付
+                              <input type="file" style={{ display: 'none' }} accept="image/*,video/*" onChange={e => handleFileUpload(e, i, 'post')} />
+                            </label>
+                            {t.mediaUrls && t.mediaUrls.map((url, urlIdx) => (
+                              <div key={urlIdx} style={{ display: 'flex', alignItems: 'center', background: 'var(--color-bg-glass-hover)', padding: '2px 8px', borderRadius: '4px', fontSize: '12px' }}>
+                                📎 添付済み
+                                <button type="button" style={{ background: 'none', border: 'none', color: 'var(--color-error)', marginLeft: '4px', cursor: 'pointer' }}
+                                  onClick={() => {
+                                    const newTemplates = [...postTemplates];
+                                    newTemplates[i].mediaUrls = newTemplates[i].mediaUrls!.filter((_, idx) => idx !== urlIdx);
+                                    setPostTemplates(newTemplates);
+                                  }}>✕</button>
+                              </div>
+                            ))}
+                          </div>
                         </div>
                       ))}
                       <button type="button" className="btn btn-outline" style={{ alignSelf: 'flex-start', marginTop: '4px' }}
-                        onClick={() => setPostTemplates([...postTemplates, ''])}>
+                        onClick={() => setPostTemplates([...postTemplates, { text: '', mediaUrls: [] }])}>
                         ＋ 投稿テンプレートを追加
                       </button>
                     </div>
@@ -318,22 +368,41 @@ export default function NewBotPage() {
                     <label className="label">リプライテンプレート</label>
                     <div style={{ display: 'flex', flexDirection: 'column', gap: '8px' }}>
                       {replyTemplates.map((t, i) => (
-                        <div key={i} style={{ display: 'flex', gap: '8px', alignItems: 'flex-start' }}>
-                          <textarea className="input-field" rows={2} value={t} style={{ flex: 1 }}
-                            placeholder="リプライ内容を入力..."
-                            onChange={e => {
-                              const newTemplates = [...replyTemplates];
-                              newTemplates[i] = e.target.value;
-                              setReplyTemplates(newTemplates);
-                            }} />
-                          <button type="button" className="btn btn-ghost" style={{ padding: '8px', color: 'var(--color-error)' }}
-                            onClick={() => setReplyTemplates(replyTemplates.filter((_, idx) => idx !== i))}>
-                            ✖
-                          </button>
+                        <div key={i} style={{ display: 'flex', gap: '8px', alignItems: 'flex-start', flexDirection: 'column', border: '1px solid var(--color-border)', padding: '8px', borderRadius: '8px' }}>
+                          <div style={{ display: 'flex', gap: '8px', width: '100%' }}>
+                            <textarea className="input-field" rows={2} value={t.text} style={{ flex: 1 }}
+                              placeholder="リプライ内容を入力..."
+                              onChange={e => {
+                                const newTemplates = [...replyTemplates];
+                                newTemplates[i].text = e.target.value;
+                                setReplyTemplates(newTemplates);
+                              }} />
+                            <button type="button" className="btn btn-ghost" style={{ padding: '8px', color: 'var(--color-error)' }}
+                              onClick={() => setReplyTemplates(replyTemplates.filter((_, idx) => idx !== i))}>
+                              ✖
+                            </button>
+                          </div>
+                          <div style={{ display: 'flex', alignItems: 'center', gap: '8px', flexWrap: 'wrap' }}>
+                            <label className="btn btn-secondary text-sm" style={{ cursor: 'pointer' }}>
+                              📷 画像/動画を添付
+                              <input type="file" style={{ display: 'none' }} accept="image/*,video/*" onChange={e => handleFileUpload(e, i, 'reply')} />
+                            </label>
+                            {t.mediaUrls && t.mediaUrls.map((url, urlIdx) => (
+                              <div key={urlIdx} style={{ display: 'flex', alignItems: 'center', background: 'var(--color-bg-glass-hover)', padding: '2px 8px', borderRadius: '4px', fontSize: '12px' }}>
+                                📎 添付済み
+                                <button type="button" style={{ background: 'none', border: 'none', color: 'var(--color-error)', marginLeft: '4px', cursor: 'pointer' }}
+                                  onClick={() => {
+                                    const newTemplates = [...replyTemplates];
+                                    newTemplates[i].mediaUrls = newTemplates[i].mediaUrls!.filter((_, idx) => idx !== urlIdx);
+                                    setReplyTemplates(newTemplates);
+                                  }}>✕</button>
+                              </div>
+                            ))}
+                          </div>
                         </div>
                       ))}
                       <button type="button" className="btn btn-outline" style={{ alignSelf: 'flex-start', marginTop: '4px' }}
-                        onClick={() => setReplyTemplates([...replyTemplates, ''])}>
+                        onClick={() => setReplyTemplates([...replyTemplates, { text: '', mediaUrls: [] }])}>
                         ＋ リプライテンプレートを追加
                       </button>
                     </div>
@@ -386,22 +455,41 @@ export default function NewBotPage() {
                       <label className="label">メンション用返信テンプレート</label>
                       <div style={{ display: 'flex', flexDirection: 'column', gap: '8px' }}>
                         {mentionReplyTemplates.map((t, i) => (
-                          <div key={i} style={{ display: 'flex', gap: '8px', alignItems: 'flex-start' }}>
-                            <textarea className="input-field" rows={2} value={t} style={{ flex: 1 }}
-                              placeholder="空欄の場合はリプライテンプレートを使用"
-                              onChange={e => {
-                                const newTemplates = [...mentionReplyTemplates];
-                                newTemplates[i] = e.target.value;
-                                setMentionReplyTemplates(newTemplates);
-                              }} />
-                            <button type="button" className="btn btn-ghost" style={{ padding: '8px', color: 'var(--color-error)' }}
-                              onClick={() => setMentionReplyTemplates(mentionReplyTemplates.filter((_, idx) => idx !== i))}>
-                              ✖
-                            </button>
+                          <div key={i} style={{ display: 'flex', gap: '8px', alignItems: 'flex-start', flexDirection: 'column', border: '1px solid rgba(99, 102, 241, 0.2)', padding: '8px', borderRadius: '8px' }}>
+                            <div style={{ display: 'flex', gap: '8px', width: '100%' }}>
+                              <textarea className="input-field" rows={2} value={t.text} style={{ flex: 1 }}
+                                placeholder="空欄の場合はリプライテンプレートを使用"
+                                onChange={e => {
+                                  const newTemplates = [...mentionReplyTemplates];
+                                  newTemplates[i].text = e.target.value;
+                                  setMentionReplyTemplates(newTemplates);
+                                }} />
+                              <button type="button" className="btn btn-ghost" style={{ padding: '8px', color: 'var(--color-error)' }}
+                                onClick={() => setMentionReplyTemplates(mentionReplyTemplates.filter((_, idx) => idx !== i))}>
+                                ✖
+                              </button>
+                            </div>
+                            <div style={{ display: 'flex', alignItems: 'center', gap: '8px', flexWrap: 'wrap' }}>
+                              <label className="btn btn-secondary text-sm" style={{ cursor: 'pointer' }}>
+                                📷 画像/動画を添付
+                                <input type="file" style={{ display: 'none' }} accept="image/*,video/*" onChange={e => handleFileUpload(e, i, 'mention')} />
+                              </label>
+                              {t.mediaUrls && t.mediaUrls.map((url, urlIdx) => (
+                                <div key={urlIdx} style={{ display: 'flex', alignItems: 'center', background: 'rgba(99, 102, 241, 0.1)', padding: '2px 8px', borderRadius: '4px', fontSize: '12px' }}>
+                                  📎 添付済み
+                                  <button type="button" style={{ background: 'none', border: 'none', color: 'var(--color-error)', marginLeft: '4px', cursor: 'pointer' }}
+                                    onClick={() => {
+                                      const newTemplates = [...mentionReplyTemplates];
+                                      newTemplates[i].mediaUrls = newTemplates[i].mediaUrls!.filter((_, idx) => idx !== urlIdx);
+                                      setMentionReplyTemplates(newTemplates);
+                                    }}>✕</button>
+                                </div>
+                              ))}
+                            </div>
                           </div>
                         ))}
                         <button type="button" className="btn btn-outline" style={{ alignSelf: 'flex-start', marginTop: '4px' }}
-                          onClick={() => setMentionReplyTemplates([...mentionReplyTemplates, ''])}>
+                          onClick={() => setMentionReplyTemplates([...mentionReplyTemplates, { text: '', mediaUrls: [] }])}>
                           ＋ メンション用テンプレートを追加
                         </button>
                       </div>

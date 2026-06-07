@@ -35,6 +35,12 @@ export interface BotFeatures {
   nightMode: boolean;
 }
 
+// --- テンプレート設定 ---
+export interface TemplateObj {
+  text: string;
+  mediaUrls?: string[];
+}
+
 // --- Bot作成/更新リクエスト ---
 export interface BotCreateRequest {
   name: string;
@@ -46,8 +52,8 @@ export interface BotCreateRequest {
   aiModel?: string;
   cloneTargetUsername?: string;
   systemInstruction?: string;
-  postTemplates?: string[];
-  replyTemplates?: string[];
+  postTemplates?: (string | TemplateObj)[];
+  replyTemplates?: (string | TemplateObj)[];
   mentionSystemInstruction?: string;
   mentionReplyTemplates?: string[];
   probabilities?: Probabilities;
@@ -75,8 +81,8 @@ export interface BotSummary {
 export interface BotDetail extends BotSummary {
   aiModel: string;
   systemInstruction: string;
-  postTemplates: string[];
-  replyTemplates: string[];
+  postTemplates: (string | TemplateObj)[];
+  replyTemplates: (string | TemplateObj)[];
   mentionSystemInstruction: string;
   mentionReplyTemplates: string[];
   probabilities: Probabilities;

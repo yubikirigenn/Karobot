@@ -31,8 +31,12 @@ export async function GET() {
     });
 
     return NextResponse.json({ bots });
-  } catch {
-    return NextResponse.json({ error: '認証が必要です' }, { status: 401 });
+  } catch (e: any) {
+    console.error("POST error:", e);
+    if (e.message === 'Unauthorized') {
+      return NextResponse.json({ error: '認証が必要です' }, { status: 401 });
+    }
+    return NextResponse.json({ error: 'サーバーエラーが発生しました', details: String(e) }, { status: 500 });
   }
 }
 

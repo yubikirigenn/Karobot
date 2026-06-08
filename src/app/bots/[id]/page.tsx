@@ -4,7 +4,8 @@ import { useEffect, useState, useCallback, use } from 'react';
 import { useRouter } from 'next/navigation';
 import Link from 'next/link';
 import { AI_PROVIDERS } from '@/types';
-import type { PostMode, AiProviderType, Probabilities, BotFeatures, TemplateObj } from '@/types';
+import type { PostMode, AiProviderType, Probabilities, BotFeatures, TemplateObj, ActionIntervals, ReactionSettings } from '@/types';
+import { ActionSettingsPanel } from '@/components/ActionSettingsPanel';
 
 export default function BotDetailPage({ params }: { params: Promise<{ id: string }> }) {
   const { id } = use(params);
@@ -41,6 +42,9 @@ export default function BotDetailPage({ params }: { params: Promise<{ id: string
   const [mentionReplyTemplates, setMentionReplyTemplates] = useState<TemplateObj[]>([{ text: '', mediaUrls: [] }]);
   const [dmSystemInstruction, setDmSystemInstruction] = useState('');
   const [dmReplyTemplates, setDmReplyTemplates] = useState<TemplateObj[]>([{ text: '', mediaUrls: [] }]);
+  const [actionIntervals, setActionIntervals] = useState<ActionIntervals>({});
+  const [reactionSettings, setReactionSettings] = useState<ReactionSettings>({ mode: 'AI', list: ['👍', '❤️', '😂', '🤔', '👏'] });
+
 
   const fetchBot = useCallback(async () => {
     try {
@@ -79,6 +83,8 @@ export default function BotDetailPage({ params }: { params: Promise<{ id: string
       setMentionReplyTemplates(convertTemplates(bot.mentionReplyTemplates));
       setDmSystemInstruction(bot.dmSystemInstruction || '');
       setDmReplyTemplates(convertTemplates(bot.dmReplyTemplates));
+      if (bot.actionIntervals) setActionIntervals(bot.actionIntervals);
+      if (bot.reactionSettings) setReactionSettings(bot.reactionSettings);
     } catch (e) {
       setError(`通信エラー: ${e}`);
       setLoading(false);
@@ -108,7 +114,11 @@ export default function BotDetailPage({ params }: { params: Promise<{ id: string
         dmSystemInstruction,
         dmReplyTemplates: dmReplyTemplates.filter(t => t.text.trim() !== '' || (t.mediaUrls && t.mediaUrls.length > 0)),
         autoPostMinInterval: Number(minInterval) || 30, autoPostPaceMultiplier: Number(paceMultiplier) || 4.7, autoPostMaxInterval: Number(maxInterval) || 3600,
-        autoPostMode, fixedIntervalMinutes: Math.max(5, Number(fixedIntervalMinutes) || 5), specificTimes,
+        autoPostMode,
+        fixedIntervalMinutes: Math.max(5, Number(fixedIntervalMinutes) || 5),
+        specificTimes,
+        actionIntervals,
+        reactionSettings,
       };
       if (karotterPassword) body.karotterPassword = karotterPassword;
       if (aiApiKey) body.aiApiKey = aiApiKey;
@@ -562,6 +572,11 @@ export default function BotDetailPage({ params }: { params: Promise<{ id: string
               {probSlider('リアクション', 'react')}
             </div>
           </div>
+
+          <ActionSettingsPanel 
+            actionIntervals={actionIntervals} setActionIntervals={setActionIntervals}
+            reactionSettings={reactionSettings} setReactionSettings={setReactionSettings}
+          />
 
           <div className="glass-card" style={{ marginBottom: '20px' }}>
             <div className="section">

@@ -11,13 +11,41 @@ export type AiProviderType = 'GEMINI' | 'GROQ_QWEN' | 'DEEPSEEK' | 'OPENAI_GPT' 
 // --- Bot稼働状態 ---
 export type BotStatus = 'ACTIVE' | 'PAUSED';
 
-// --- 確率設定 ---
 export interface Probabilities {
   like: number;
   rekarot: number;
   quote: number;
   reply: number;
   react: number;
+}
+
+// --- スケジュールアクション設定 ---
+export type AutoPostMode = 'DYNAMIC_PACE' | 'FIXED_INTERVAL' | 'SPECIFIC_TIMES';
+
+export interface IntervalConfig {
+  mode: AutoPostMode;
+  fixedIntervalMinutes?: number;
+  specificTimes?: string[];
+  minInterval?: number;
+  maxInterval?: number;
+  multiplier?: number;
+}
+
+export interface ActionIntervals {
+  like?: IntervalConfig;
+  rekarot?: IntervalConfig;
+  quote?: IntervalConfig;
+  react?: IntervalConfig;
+  reply?: IntervalConfig;
+}
+
+export interface ActionStates {
+  [actionType: string]: string; // ISO date string of last execution
+}
+
+export interface ReactionSettings {
+  mode: 'AI' | 'RANDOM_FROM_LIST';
+  list: string[];
 }
 
 // --- 機能フラグ ---
@@ -58,6 +86,8 @@ export interface BotCreateRequest {
   mentionSystemInstruction?: string;
   mentionReplyTemplates?: string[];
   probabilities?: Probabilities;
+  actionIntervals?: ActionIntervals;
+  reactionSettings?: ReactionSettings;
   features?: BotFeatures;
   blockedUsers?: string[];
   autoPostMinInterval?: number;

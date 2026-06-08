@@ -4,8 +4,9 @@ import { useState } from 'react';
 import { useRouter } from 'next/navigation';
 import Link from 'next/link';
 import { AI_PROVIDERS } from '@/types';
-import type { PostMode, AiProviderType, Probabilities, BotFeatures, TemplateObj } from '@/types';
+import type { PostMode, AiProviderType, Probabilities, BotFeatures, TemplateObj, ActionIntervals, ReactionSettings } from '@/types';
 import { DEFAULT_SYSTEM_INSTRUCTION } from '@/lib/ai/prompts';
+import { ActionSettingsPanel } from '@/components/ActionSettingsPanel';
 
 const defaultProbs: Probabilities = { like: 0.02, rekarot: 0, quote: 0.025, reply: 0.03, react: 0.03 };
 const defaultFeatures: BotFeatures = {
@@ -43,8 +44,10 @@ export default function NewBotPage() {
   const [dmSystemInstruction, setDmSystemInstruction] = useState('');
   const [dmReplyTemplates, setDmReplyTemplates] = useState<TemplateObj[]>([{ text: '', mediaUrls: [] }]);
 
-  // 確率
+  // 確率・アクション詳細設定
   const [probs, setProbs] = useState<Probabilities>(defaultProbs);
+  const [actionIntervals, setActionIntervals] = useState<ActionIntervals>({});
+  const [reactionSettings, setReactionSettings] = useState<ReactionSettings>({ mode: 'AI', list: ['👍', '❤️', '😂', '🤔', '👏'] });
 
   // 機能フラグ
   const [features, setFeatures] = useState<BotFeatures>(defaultFeatures);
@@ -137,6 +140,8 @@ export default function NewBotPage() {
         autoPostMode,
         fixedIntervalMinutes: Math.max(5, Number(fixedIntervalMinutes) || 5),
         specificTimes,
+        actionIntervals,
+        reactionSettings,
       };
 
       if (aiApiKey) body.aiApiKey = aiApiKey;
@@ -589,6 +594,11 @@ export default function NewBotPage() {
               {probSlider('リアクション', 'react')}
             </div>
           </div>
+
+          <ActionSettingsPanel 
+            actionIntervals={actionIntervals} setActionIntervals={setActionIntervals}
+            reactionSettings={reactionSettings} setReactionSettings={setReactionSettings}
+          />
 
           {/* 投稿間隔 */}
           <div className="glass-card" style={{ marginBottom: '20px' }}>

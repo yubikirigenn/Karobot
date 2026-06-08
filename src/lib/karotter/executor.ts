@@ -157,16 +157,8 @@ export async function executeBotCycle(botId: string, forceAutoPost: boolean = fa
   // === Phase 2: 通知処理（メンション反応、フォローバック含む） ===
   await executeNotifications(ctx);
 
-  // === Phase 3: ランダムアクション ===
-  // 定期投稿モード（FIXED_INTERVAL / SPECIFIC_TIMES）の場合、
-  // 自発カロートが発生したサイクルでのみランダムアクションを実行
-  const autoPostMode = bot.autoPostMode || 'DYNAMIC_PACE';
-  const isScheduledMode = autoPostMode === 'FIXED_INTERVAL' || autoPostMode === 'SPECIFIC_TIMES';
-  const shouldRunRandomActions = isScheduledMode ? didAutoPost : true;
-
-  if (shouldRunRandomActions) {
-    await executeRandomActions(ctx);
-  }
+  // === Phase 3: アクション実行（スケジュール/確率） ===
+  await executeRandomActions(ctx, didAutoPost);
 
   // トークンをキャッシュ更新
   await prisma.bot.update({
@@ -180,6 +172,35 @@ export async function executeBotCycle(botId: string, forceAutoPost: boolean = fa
   return { actions, errors };
 }
 
+// --- インターバル判定ヘルパー ---
+function shouldRunAction(
+  mode: string,
+  lastRunTime: number,
+  fixedIntervalMinutes: number,
+  specificTimes: string[],
+  minIntervalSec: number
+): boolean {
+  const now = new Date();
+  const diffSec = (now.getTime() - lastRunTime) / 1000;
+
+  if (mode === 'FIXED_INTERVAL') {
+    const intervalSec = fixedIntervalMinutes * 60;
+    return diffSec > intervalSec;
+  } else if (mode === 'SPECIFIC_TIMES') {
+    const jstNow = new Date(now.getTime() + 9 * 60 * 60 * 1000);
+    return specificTimes.some(time => {
+      const [targetH, targetM] = time.split(':').map(Number);
+      const targetMinutes = targetH * 60 + targetM;
+      const currentMinutes = jstNow.getUTCHours() * 60 + jstNow.getUTCMinutes();
+      const diffMinutes = currentMinutes - targetMinutes;
+      return diffMinutes >= 0 && diffMinutes <= 5 && diffSec > 45 * 60;
+    });
+  } else {
+    // DYNAMIC_PACE
+    return lastRunTime === 0 || diffSec > minIntervalSec;
+  }
+}
+
 // ==========================================
 // Phase 1: 自発カロート
 // ==========================================
@@ -190,28 +211,14 @@ async function executeAutoPost(ctx: BotContext, forceAutoPost: boolean): Promise
   let shouldAutoPost = false;
   const now = new Date();
   const lastPostTime = bot.lastAutoPostAt ? new Date(bot.lastAutoPostAt).getTime() : 0;
-  const diffSec = (now.getTime() - lastPostTime) / 1000;
 
-  const mode = bot.autoPostMode || 'DYNAMIC_PACE';
-
-  if (mode === 'FIXED_INTERVAL') {
-    const intervalSec = (bot.fixedIntervalMinutes || 60) * 60;
-    shouldAutoPost = diffSec > intervalSec;
-  } else if (mode === 'SPECIFIC_TIMES') {
-    // JST (UTC+9) の現在時刻を取得
-    const jstNow = new Date(now.getTime() + 9 * 60 * 60 * 1000);
-    const targetTimes = (bot.specificTimes as string[]) || [];
-    shouldAutoPost = targetTimes.some(time => {
-      const [targetH, targetM] = time.split(':').map(Number);
-      const targetMinutes = targetH * 60 + targetM;
-      const currentMinutes = jstNow.getUTCHours() * 60 + jstNow.getUTCMinutes();
-      const diffMinutes = currentMinutes - targetMinutes;
-      return diffMinutes >= 0 && diffMinutes <= 5 && diffSec > 45 * 60;
-    });
-  } else {
-    // DYNAMIC_PACE
-    shouldAutoPost = !bot.lastAutoPostAt || diffSec > bot.autoPostMinInterval;
-  }
+  shouldAutoPost = shouldRunAction(
+    bot.autoPostMode || 'DYNAMIC_PACE',
+    lastPostTime,
+    bot.fixedIntervalMinutes || 60,
+    (bot.specificTimes as string[]) || [],
+    bot.autoPostMinInterval
+  );
 
   if (forceAutoPost) {
     shouldAutoPost = true;
@@ -547,50 +554,92 @@ async function executeNotifications(ctx: BotContext): Promise<void> {
 }
 
 // ==========================================
-// Phase 3: ランダムアクション
+// Phase 3: アクション実行（スケジュール/確率）
 // ==========================================
-async function executeRandomActions(ctx: BotContext): Promise<void> {
+async function executeRandomActions(ctx: BotContext, didAutoPost: boolean): Promise<void> {
   const { bot, client, provider, features, probabilities, blockedUsers, seenIds, aiPostedIds, systemInst, actions, errors } = ctx;
   const botId = bot.id;
   const actMult = getActivityMultiplier();
 
   try {
-    const totalProb = (probabilities.like + probabilities.rekarot + probabilities.quote + probabilities.reply + probabilities.react) * actMult;
-    const rand = Math.random();
+    const actionIntervals = (bot.actionIntervals || {}) as any;
+    const actionStates = (bot.actionStates || {}) as any;
+    const newActionStates = { ...actionStates };
+    let statesUpdated = false;
 
-    if (rand < totalProb) {
-      let actionType: string;
-      const r = rand / actMult;
-      if (r < probabilities.like) actionType = 'LIKE';
-      else if (r < probabilities.like + probabilities.rekarot) actionType = 'REKAROT';
-      else if (r < probabilities.like + probabilities.rekarot + probabilities.quote) actionType = 'QUOTE';
-      else if (r < probabilities.like + probabilities.rekarot + probabilities.quote + probabilities.react) actionType = 'REACT';
-      else actionType = 'REPLY';
+    // アクションごとの実行可否を判定
+    const actionTypes = ['LIKE', 'REKAROT', 'QUOTE', 'REACT', 'REPLY'] as const;
+    const actionsToRun: string[] = [];
+    const featureMap: Record<string, boolean> = {
+      LIKE: features.like !== false,
+      REKAROT: features.rekarot !== false,
+      QUOTE: features.quoteRekarot !== false,
+      REACT: features.reaction !== false,
+      REPLY: features.reply !== false,
+    };
 
-      // 対応する機能がOFFなら何もしない
-      const featureMap: Record<string, boolean> = {
-        LIKE: features.like !== false,
-        REKAROT: features.rekarot !== false,
-        QUOTE: features.quoteRekarot !== false,
-        REACT: features.reaction !== false,
-        REPLY: features.reply !== false,
-      };
-      if (!featureMap[actionType]) {
-        // スキップ
-      } else {
-        const globalPosts = await getGlobalPosts(client, 60);
-        const candidates = globalPosts.filter(p => {
-          const actual = p.post || p;
-          const author = actual.author?.username || actual.user?.username || '';
-          const pid = String(actual.id);
-          if (author.toLowerCase() === bot.karotterUsername.toLowerCase()) return false;
-          if (author.toLowerCase().includes('bot')) return false;
-          if (blockedUsers.map(u => u.toLowerCase()).includes(author.toLowerCase())) return false;
-          if (seenIds.has(pid) || aiPostedIds.has(pid)) return false;
-          return true;
-        }).slice(0, 10);
+    // 1. スケジュール判定
+    for (const type of actionTypes) {
+      if (!featureMap[type]) continue;
+      
+      const config = actionIntervals[type.toLowerCase()];
+      if (config && config.mode) {
+        const lastRunTime = actionStates[type] ? new Date(actionStates[type]).getTime() : 0;
+        const shouldRun = shouldRunAction(
+          config.mode,
+          lastRunTime,
+          config.fixedIntervalMinutes || 60,
+          config.specificTimes || [],
+          config.minInterval || 30
+        );
+        if (shouldRun) {
+          actionsToRun.push(type);
+          newActionStates[type] = new Date().toISOString();
+          statesUpdated = true;
+        }
+      }
+    }
 
-        if (candidates.length > 0) {
+    // 2. 確率判定（スケジュール設定がない機能のみ）
+    // 定期投稿モードの場合は自発カロートが発生した時のみ
+    const autoPostMode = bot.autoPostMode || 'DYNAMIC_PACE';
+    const isScheduledMode = autoPostMode === 'FIXED_INTERVAL' || autoPostMode === 'SPECIFIC_TIMES';
+    const shouldRunProbActions = isScheduledMode ? didAutoPost : true;
+
+    if (shouldRunProbActions && actionsToRun.length === 0) {
+      const totalProb = (probabilities.like + probabilities.rekarot + probabilities.quote + probabilities.reply + probabilities.react) * actMult;
+      const rand = Math.random();
+
+      if (rand < totalProb) {
+        let probAction: string;
+        const r = rand / actMult;
+        if (r < probabilities.like) probAction = 'LIKE';
+        else if (r < probabilities.like + probabilities.rekarot) probAction = 'REKAROT';
+        else if (r < probabilities.like + probabilities.rekarot + probabilities.quote) probAction = 'QUOTE';
+        else if (r < probabilities.like + probabilities.rekarot + probabilities.quote + probabilities.react) probAction = 'REACT';
+        else probAction = 'REPLY';
+
+        if (featureMap[probAction] && !actionIntervals[probAction.toLowerCase()]?.mode) {
+           actionsToRun.push(probAction);
+        }
+      }
+    }
+
+    if (actionsToRun.length > 0) {
+      const globalPosts = await getGlobalPosts(client, 60);
+      const candidates = globalPosts.filter(p => {
+        const actual = p.post || p;
+        const author = actual.author?.username || actual.user?.username || '';
+        const pid = String(actual.id);
+        if (author.toLowerCase() === bot.karotterUsername.toLowerCase()) return false;
+        if (author.toLowerCase().includes('bot')) return false;
+        if (blockedUsers.map(u => u.toLowerCase()).includes(author.toLowerCase())) return false;
+        if (seenIds.has(pid) || aiPostedIds.has(pid)) return false;
+        return true;
+      }).slice(0, 10);
+
+      if (candidates.length > 0) {
+        for (const actionType of actionsToRun) {
           if (actionType === 'LIKE' && features.like !== false && bot.postMode === 'AI') {
             const candidateInfos = candidates.map(c => ({
               id: String(c.id), author: c.author?.username || 'unknown', content: String(c.content || '').slice(0, 100),
@@ -617,14 +666,16 @@ async function executeRandomActions(ctx: BotContext): Promise<void> {
           } else if (actionType === 'REACT' && features.reaction !== false) {
             const target = candidates[Math.floor(Math.random() * candidates.length)];
             const tid = String(target.id);
+            const rSettings = (bot.reactionSettings || { mode: 'AI', list: ['❤️', '✨', '👀', '👍', '🤔', '🙌', '👏'] }) as any;
             let emoji = '❤️';
-            if (bot.postMode === 'AI') {
+
+            if (bot.postMode === 'AI' && rSettings.mode === 'AI') {
               const prompt = buildEmojiSelectionPrompt(target.content || '');
               const result = await provider.generateText(prompt, '', { temperature: 0.6 });
               const match = result.match(/最終決定:\s*(.)/);
               emoji = match ? match[1] : '❤️';
             } else {
-              const emojis = ['❤️', '✨', '👀', '👍', '🤔', '🙌', '👏'];
+              const emojis = rSettings.list && rSettings.list.length > 0 ? rSettings.list : ['❤️', '👍'];
               emoji = emojis[Math.floor(Math.random() * emojis.length)];
             }
             await reactPost(client, tid, emoji);
@@ -668,7 +719,7 @@ async function executeRandomActions(ctx: BotContext): Promise<void> {
                   const { cleanText } = extractKnowledgeAndClean(raw);
                   replyText = cleanText;
                 } else {
-                  replyText = await provider.generateText('', '', {});
+                  replyText = (provider as any).getReplyTemplate ? (provider as any).getReplyTemplate() : 'SKIP';
                 }
 
                 if (replyText && replyText !== 'SKIP') {
@@ -687,6 +738,10 @@ async function executeRandomActions(ctx: BotContext): Promise<void> {
           }
         }
       }
+    }
+
+    if (statesUpdated) {
+      await prisma.bot.update({ where: { id: botId }, data: { actionStates: newActionStates } });
     }
   } catch (e) {
     errors.push(`ランダムアクションエラー: ${e}`);

@@ -72,6 +72,7 @@ export async function PUT(
       'name', 'karotterUsername', 'postMode', 'aiProvider', 'aiModel',
       'cloneTargetUsername', 'systemInstruction', 'postTemplates', 'replyTemplates',
       'mentionSystemInstruction', 'mentionReplyTemplates',
+      'dmSystemInstruction', 'dmReplyTemplates',
       'probabilities', 'features', 'blockedUsers',
       'autoPostMinInterval', 'autoPostPaceMultiplier', 'autoPostMaxInterval',
       'autoPostMode', 'fixedIntervalMinutes', 'specificTimes',

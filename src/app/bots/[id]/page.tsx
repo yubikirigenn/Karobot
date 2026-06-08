@@ -28,7 +28,7 @@ export default function BotDetailPage({ params }: { params: Promise<{ id: string
   const [probs, setProbs] = useState<Probabilities>({ like: 0.02, rekarot: 0, quote: 0.025, reply: 0.03, react: 0.03 });
   const [features, setFeatures] = useState<BotFeatures>({
     autoPost: true, like: true, rekarot: false, quoteRekarot: true,
-    reply: true, reaction: true, followBack: true, notificationReply: true, mentionReaction: true, selfLearning: true, nightMode: true,
+    reply: true, reaction: true, followBack: true, notificationReply: true, dmReply: true, mentionReaction: true, selfLearning: true, nightMode: true,
   });
   const [autoPostMode, setAutoPostMode] = useState<'DYNAMIC_PACE' | 'FIXED_INTERVAL' | 'SPECIFIC_TIMES'>('DYNAMIC_PACE');
   const [fixedIntervalMinutes, setFixedIntervalMinutes] = useState<number | ''>(60);
@@ -39,6 +39,8 @@ export default function BotDetailPage({ params }: { params: Promise<{ id: string
   const [blockedUsersText, setBlockedUsersText] = useState('');
   const [mentionSystemInstruction, setMentionSystemInstruction] = useState('');
   const [mentionReplyTemplates, setMentionReplyTemplates] = useState<TemplateObj[]>([{ text: '', mediaUrls: [] }]);
+  const [dmSystemInstruction, setDmSystemInstruction] = useState('');
+  const [dmReplyTemplates, setDmReplyTemplates] = useState<TemplateObj[]>([{ text: '', mediaUrls: [] }]);
 
   const fetchBot = useCallback(async () => {
     try {
@@ -75,6 +77,8 @@ export default function BotDetailPage({ params }: { params: Promise<{ id: string
       setBlockedUsersText((bot.blockedUsers || []).join(', '));
       setMentionSystemInstruction(bot.mentionSystemInstruction || '');
       setMentionReplyTemplates(convertTemplates(bot.mentionReplyTemplates));
+      setDmSystemInstruction(bot.dmSystemInstruction || '');
+      setDmReplyTemplates(convertTemplates(bot.dmReplyTemplates));
     } catch (e) {
       setError(`通信エラー: ${e}`);
       setLoading(false);
@@ -101,6 +105,8 @@ export default function BotDetailPage({ params }: { params: Promise<{ id: string
         blockedUsers: blockedUsersText.split(',').map(s => s.trim()).filter(Boolean),
         mentionSystemInstruction,
         mentionReplyTemplates: mentionReplyTemplates.filter(t => t.text.trim() !== '' || (t.mediaUrls && t.mediaUrls.length > 0)),
+        dmSystemInstruction,
+        dmReplyTemplates: dmReplyTemplates.filter(t => t.text.trim() !== '' || (t.mediaUrls && t.mediaUrls.length > 0)),
         autoPostMinInterval: Number(minInterval) || 30, autoPostPaceMultiplier: Number(paceMultiplier) || 4.7, autoPostMaxInterval: Number(maxInterval) || 3600,
         autoPostMode, fixedIntervalMinutes: Math.max(5, Number(fixedIntervalMinutes) || 5), specificTimes,
       };
@@ -140,7 +146,7 @@ export default function BotDetailPage({ params }: { params: Promise<{ id: string
     </label>
   );
 
-  const handleFileUpload = async (e: React.ChangeEvent<HTMLInputElement>, index: number, type: 'post' | 'reply' | 'mention') => {
+  const handleFileUpload = async (e: React.ChangeEvent<HTMLInputElement>, index: number, type: 'post' | 'reply' | 'mention' | 'dm') => {
     if (!e.target.files || e.target.files.length === 0) return;
     
     const file = e.target.files[0];
@@ -164,7 +170,8 @@ export default function BotDetailPage({ params }: { params: Promise<{ id: string
 
         if (type === 'post') updateState(postTemplates, setPostTemplates);
         else if (type === 'reply') updateState(replyTemplates, setReplyTemplates);
-        else updateState(mentionReplyTemplates, setMentionReplyTemplates);
+        else if (type === 'mention') updateState(mentionReplyTemplates, setMentionReplyTemplates);
+        else updateState(dmReplyTemplates, setDmReplyTemplates);
       }
     } catch (err) {
       console.error('Upload failed', err);
@@ -401,6 +408,7 @@ export default function BotDetailPage({ params }: { params: Promise<{ id: string
                 {featureToggle('リアクション', 'reaction')}
                 {featureToggle('フォローバック', 'followBack')}
                 {featureToggle('通知自動返信', 'notificationReply')}
+                {featureToggle('DM自動返信', 'dmReply')}
                 {featureToggle('メンション反応', 'mentionReaction')}
                 {featureToggle('AI自己学習', 'selfLearning')}
                 {featureToggle('深夜おやすみモード', 'nightMode')}
@@ -467,6 +475,74 @@ export default function BotDetailPage({ params }: { params: Promise<{ id: string
                         <button type="button" className="btn btn-outline" style={{ alignSelf: 'flex-start', marginTop: '4px' }}
                           onClick={() => setMentionReplyTemplates([...mentionReplyTemplates, { text: '', mediaUrls: [] }])}>
                           ＋ メンション用テンプレートを追加
+                        </button>
+                      </div>
+                    </div>
+                  )}
+                </div>
+              )}
+
+              {/* DM反応の詳細設定 */}
+              {features.dmReply && (
+                <div style={{ marginTop: '16px', padding: '16px', borderRadius: '10px', background: 'rgba(236, 72, 153, 0.08)', border: '1px solid rgba(236, 72, 153, 0.2)' }}>
+                  <h3 style={{ fontSize: '14px', fontWeight: 600, marginBottom: '12px', color: 'var(--color-text-primary)', display: 'flex', alignItems: 'center', gap: '8px' }}>
+                    <span>✉️</span> DM返信設定
+                  </h3>
+                  <p style={{ fontSize: '12px', color: 'var(--color-text-tertiary)', marginBottom: '16px', lineHeight: 1.6 }}>
+                    ダイレクトメッセージ（DM）を受け取った時の返信に使う設定です。空欄の場合はメインの設定を使用します。
+                  </p>
+
+                  {postMode === 'AI' && (
+                    <div className="form-group">
+                      <label className="label">DM用キャラクター設定</label>
+                      <textarea className="input-field" rows={5}
+                        placeholder="空欄の場合はメインのキャラクター設定を使用"
+                        value={dmSystemInstruction}
+                        onChange={e => setDmSystemInstruction(e.target.value)} />
+                    </div>
+                  )}
+
+                  {postMode !== 'AI' && (
+                    <div className="form-group">
+                      <label className="label">DM用返信テンプレート</label>
+                      <div style={{ display: 'flex', flexDirection: 'column', gap: '8px' }}>
+                        {dmReplyTemplates.map((t, i) => (
+                          <div key={i} style={{ display: 'flex', gap: '8px', alignItems: 'flex-start', flexDirection: 'column', border: '1px solid rgba(236, 72, 153, 0.2)', padding: '8px', borderRadius: '8px' }}>
+                            <div style={{ display: 'flex', gap: '8px', width: '100%' }}>
+                              <textarea className="input-field" rows={2} value={t.text} style={{ flex: 1 }}
+                                placeholder="空欄の場合はリプライテンプレートを使用"
+                                onChange={e => {
+                                  const newTemplates = [...dmReplyTemplates];
+                                  newTemplates[i].text = e.target.value;
+                                  setDmReplyTemplates(newTemplates);
+                                }} />
+                              <button type="button" className="btn btn-ghost" style={{ padding: '8px', color: 'var(--color-error)' }}
+                                onClick={() => setDmReplyTemplates(dmReplyTemplates.filter((_, idx) => idx !== i))}>
+                                ✖
+                              </button>
+                            </div>
+                            <div style={{ display: 'flex', alignItems: 'center', gap: '8px', flexWrap: 'wrap' }}>
+                              <label className="btn btn-secondary text-sm" style={{ cursor: 'pointer' }}>
+                                📷 画像/動画を添付
+                                <input type="file" style={{ display: 'none' }} accept="image/*,video/*" onChange={e => handleFileUpload(e, i, 'dm')} />
+                              </label>
+                              {t.mediaUrls && t.mediaUrls.map((url, urlIdx) => (
+                                <div key={urlIdx} style={{ display: 'flex', alignItems: 'center', background: 'rgba(236, 72, 153, 0.1)', padding: '2px 8px', borderRadius: '4px', fontSize: '12px' }}>
+                                  📎 添付済み
+                                  <button type="button" style={{ background: 'none', border: 'none', color: 'var(--color-error)', marginLeft: '4px', cursor: 'pointer' }}
+                                    onClick={() => {
+                                      const newTemplates = [...dmReplyTemplates];
+                                      newTemplates[i].mediaUrls = newTemplates[i].mediaUrls!.filter((_, idx) => idx !== urlIdx);
+                                      setDmReplyTemplates(newTemplates);
+                                    }}>✕</button>
+                                </div>
+                              ))}
+                            </div>
+                          </div>
+                        ))}
+                        <button type="button" className="btn btn-outline" style={{ alignSelf: 'flex-start', marginTop: '4px' }}
+                          onClick={() => setDmReplyTemplates([...dmReplyTemplates, { text: '', mediaUrls: [] }])}>
+                          ＋ DM用テンプレートを追加
                         </button>
                       </div>
                     </div>

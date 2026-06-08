@@ -55,11 +55,15 @@ model Bot {
   mentionSystemInstruction String  @default("") @db.Text
   mentionReplyTemplates  Json      @default("[]")   // string[]
 
+  // DM返信設定
+  dmSystemInstruction    String    @default("") @db.Text
+  dmReplyTemplates       Json      @default("[]")   // string[]
+
   // 確率コントロール
   probabilities          Json      @default("{\"like\":0.02,\"rekarot\":0.00,\"quote\":0.025,\"reply\":0.03,\"react\":0.03}")
 
   // 機能ON/OFFフラグ
-  features               Json      @default("{\"autoPost\":true,\"like\":true,\"rekarot\":false,\"quoteRekarot\":true,\"reply\":true,\"reaction\":true,\"followBack\":true,\"notificationReply\":true,\"selfLearning\":true}")
+  features               Json      @default("{\"autoPost\":true,\"like\":true,\"rekarot\":false,\"quoteRekarot\":true,\"reply\":true,\"reaction\":true,\"followBack\":true,\"notificationReply\":true,\"selfLearning\":true,\"dmReply\":true}")
 
   // ブロックリスト
   blockedUsers           Json      @default("[]")   // string[]

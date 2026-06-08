@@ -79,10 +79,12 @@ export async function POST(request: NextRequest) {
         replyTemplates: body.replyTemplates || [],
         mentionSystemInstruction: body.mentionSystemInstruction || '',
         mentionReplyTemplates: body.mentionReplyTemplates || [],
+        dmSystemInstruction: body.dmSystemInstruction || '',
+        dmReplyTemplates: body.dmReplyTemplates || [],
         probabilities: body.probabilities || { like: 0.02, rekarot: 0, quote: 0.025, reply: 0.03, react: 0.03 },
         features: body.features || {
           autoPost: true, like: true, rekarot: false, quoteRekarot: true,
-          reply: true, reaction: true, followBack: true, notificationReply: true, mentionReaction: true, selfLearning: true,
+          reply: true, reaction: true, followBack: true, notificationReply: true, mentionReaction: true, selfLearning: true, nightMode: true, dmReply: true,
         },
         blockedUsers: body.blockedUsers || [],
         autoPostMinInterval: body.autoPostMinInterval || 30,

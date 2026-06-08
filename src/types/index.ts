@@ -33,6 +33,7 @@ export interface BotFeatures {
   mentionReaction: boolean;
   selfLearning: boolean;
   nightMode: boolean;
+  dmReply: boolean;
 }
 
 // --- テンプレート設定 ---
@@ -85,6 +86,8 @@ export interface BotDetail extends BotSummary {
   replyTemplates: (string | TemplateObj)[];
   mentionSystemInstruction: string;
   mentionReplyTemplates: string[];
+  dmSystemInstruction: string;
+  dmReplyTemplates: (string | TemplateObj)[];
   probabilities: Probabilities;
   features: BotFeatures;
   blockedUsers: string[];

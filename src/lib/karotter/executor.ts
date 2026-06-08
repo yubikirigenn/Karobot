@@ -8,7 +8,7 @@
 import { prisma } from '@/lib/prisma';
 import { decrypt } from '@/lib/encryption';
 import { KarotterClient } from './client';
-import { postKaroto, likePost, rekarotPost, reactPost, followUser } from './actions';
+import { postKaroto, likePost, rekarotPost, reactPost, followUser, getDmGroups, getDmMessages, markDmAsRead, sendDm } from './actions';
 import { getGlobalPosts, getPostDetail, getRootId, resolveQuoteChain, buildTlContext, calculateTlPace, getActivityMultiplier } from './timeline';
 import { getNotifications, classifyNotification } from './notifications';
 import { createProvider } from '@/lib/ai/provider';
@@ -18,7 +18,7 @@ import {
   buildActionSelectionPrompt, buildEmojiSelectionPrompt,
   getTimeContext, extractKnowledgeAndClean
 } from '@/lib/ai/prompts';
-import type { BotFeatures, Probabilities } from '@/types';
+import type { BotFeatures, Probabilities, TemplateObj } from '@/types';
 
 // --- 共通コンテキスト（フェーズ間で共有） ---
 interface BotContext {
@@ -32,6 +32,7 @@ interface BotContext {
   aiPostedIds: Set<string>;
   systemInst: string;
   mentionSystemInst: string;
+  dmSystemInst: string;
   cloneContext?: string;
   actions: string[];
   errors: string[];
@@ -112,6 +113,7 @@ export async function executeBotCycle(botId: string, forceAutoPost: boolean = fa
 
   const systemInst = bot.systemInstruction || '';
   const mentionSystemInst = (bot as Record<string, unknown>).mentionSystemInstruction as string || '';
+  const dmSystemInst = (bot as Record<string, unknown>).dmSystemInstruction as string || '';
 
   // 口調クローン用コンテキストの取得
   let cloneContext: string | undefined = undefined;
@@ -142,7 +144,7 @@ export async function executeBotCycle(botId: string, forceAutoPost: boolean = fa
   const ctx: BotContext = {
     bot: bot as BotContext['bot'],
     client, provider, features, probabilities, blockedUsers,
-    seenIds, aiPostedIds, systemInst, mentionSystemInst, cloneContext,
+    seenIds, aiPostedIds, systemInst, mentionSystemInst, dmSystemInst, cloneContext,
     actions, errors,
   };
 
@@ -267,7 +269,7 @@ async function executeAutoPost(ctx: BotContext, forceAutoPost: boolean): Promise
 // Phase 2: 通知処理（メンション反応含む）
 // ==========================================
 async function executeNotifications(ctx: BotContext): Promise<void> {
-  const { bot, client, provider, features, blockedUsers, seenIds, aiPostedIds, systemInst, mentionSystemInst, actions, errors } = ctx;
+  const { bot, client, provider, features, blockedUsers, seenIds, aiPostedIds, systemInst, mentionSystemInst, dmSystemInst, actions, errors } = ctx;
   const botId = bot.id;
   const botFeatures = features as unknown as import('@/types').BotFeatures;
   const actMult = getActivityMultiplier(botFeatures?.nightMode !== false);
@@ -417,6 +419,120 @@ async function executeNotifications(ctx: BotContext): Promise<void> {
   } catch (e) {
     errors.push(`通知処理エラー: ${e}`);
     await logAction(botId, 'ERROR', `通知処理エラー: ${e}`, false);
+  }
+
+  // === Phase 2-B: DM処理 ===
+  if (features.dmReply !== false) {
+    try {
+      const groups = await getDmGroups(client);
+      for (const group of groups) {
+        // 未読メッセージがあるグループのみ処理
+        if (group.unreadCount > 0) {
+          const messages = await getDmMessages(client, group.id, 5);
+          const unreadMessages = messages.filter((m: any) => !m.isRead && m.userId !== bot.karotterUsername);
+          
+          if (unreadMessages.length > 0) {
+            // 最も新しいメッセージを取得
+            const latestMsg = unreadMessages[0];
+            const cleanContent = latestMsg.content || '';
+            const targetUsername = latestMsg.user?.username || 'unknown';
+
+            if (targetUsername === bot.karotterUsername) continue; // 自身のメッセージは無視
+
+            // DM用のシステムプロンプトを決定
+            const effectiveSystemInst = dmSystemInst || systemInst;
+
+            if (bot.postMode === 'AI') {
+              // スレッドメモリから会話履歴を取得
+              const threadMem = bot.threadMemory as Record<string, { conversations?: string[]; features?: string }> || {};
+              const threadKey = `${targetUsername}_DM_${group.id}`;
+              const history = threadMem[threadKey]?.conversations?.join('\n') || '';
+
+              const prompt = buildReplyPrompt(cleanContent, getTimeContext(), history, '', false, ctx.cloneContext);
+              let raw: string;
+              try {
+                raw = await provider.generateWithImages(prompt, [], effectiveSystemInst, { temperature: 0.7 });
+              } catch (e) {
+                actions.push(`DM返信エラー: @${targetUsername}`);
+                await logAction(botId, 'ERROR', 'DM返信AI生成エラー: ' + e, false);
+                await markDmAsRead(client, group.id);
+                continue;
+              }
+
+              const { cleanText, knowledge } = extractKnowledgeAndClean(raw);
+
+              if (knowledge && features.selfLearning !== false) {
+                await updateKnowledge(botId, knowledge);
+              }
+
+              if (cleanText && cleanText !== 'SKIP') {
+                const replyText = cleanText.replace(/\[REPLY\]/g, '').trim();
+
+                try {
+                  const success = await sendDm(client, group.id, replyText);
+                  if (success) {
+                    actions.push(`DM返信: @${targetUsername}`);
+                    await logAction(botId, 'REPLY', `@${targetUsername}にDM返信: ${replyText.slice(0, 200)}`, true);
+                    
+                    // 会話履歴を更新
+                    const newHistory = [...(threadMem[threadKey]?.conversations || []), `相手: ${cleanContent}`, `あなた: ${replyText}`].slice(-20);
+                    await prisma.bot.update({
+                      where: { id: botId },
+                      data: { threadMemory: { ...threadMem, [threadKey]: { conversations: newHistory } } },
+                    });
+                  }
+                } catch (e) {
+                  actions.push(`DM送信エラー: @${targetUsername}`);
+                  await logAction(botId, 'ERROR', 'DM送信エラー: ' + e, false);
+                }
+              }
+            } else {
+              // テンプレートモード
+              const dmReplyTemplates = ((bot as any).dmReplyTemplates || []) as TemplateObj[];
+              let replyText = '';
+              let mediaUrls: string[] = [];
+              
+              if (dmReplyTemplates.length > 0) {
+                const idx = Math.floor(Math.random() * dmReplyTemplates.length);
+                const chosen = dmReplyTemplates[idx];
+                if (typeof chosen === 'string') {
+                  replyText = chosen;
+                } else {
+                  replyText = (chosen as any).text || '';
+                  mediaUrls = (chosen as any).mediaUrls || [];
+                }
+                replyText = replyText.replace(/\{\{time\}\}/g, () => { const d = new Date(); return `${d.getHours()}:${String(d.getMinutes()).padStart(2, '0')}`; });
+              } else {
+                // デフォルトはリプライテンプレートを使用
+                replyText = await provider.generateWithImages('', [], '', {});
+                if ((provider as any).lastSelectedMediaUrls) {
+                  mediaUrls = (provider as any).lastSelectedMediaUrls;
+                }
+              }
+
+              if (replyText && replyText !== 'SKIP') {
+                try {
+                  const success = await sendDm(client, group.id, replyText, mediaUrls);
+                  if (success) {
+                    actions.push(`DM返信(テンプレート): @${targetUsername}`);
+                    await logAction(botId, 'REPLY', `テンプレートDM返信: ${replyText.slice(0, 200)}`, true);
+                  }
+                } catch (e) {
+                  actions.push(`DM送信エラー: @${targetUsername}`);
+                  await logAction(botId, 'ERROR', 'テンプレートDM送信エラー: ' + e, false);
+                }
+              }
+            }
+
+            // 既読にする
+            await markDmAsRead(client, group.id);
+          }
+        }
+      }
+    } catch (e) {
+      errors.push(`DM処理エラー: ${e}`);
+      await logAction(botId, 'ERROR', `DM処理エラー: ${e}`, false);
+    }
   }
 }
 

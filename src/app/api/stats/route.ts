@@ -3,15 +3,13 @@
 // GET /api/stats
 // ==========================================
 import { NextResponse } from 'next/server';
-import { PrismaClient } from '@prisma/client';
+import { prisma } from '@/lib/prisma';
 import { KarotterClient } from '@/lib/karotter/client';
 import { decrypt } from '@/lib/encryption';
 
-const prisma = new PrismaClient();
-
 export async function GET() {
   try {
-    const bot = await prisma.bot.findFirst();
+    const bot = await prisma.bot.findFirst({ where: { karotterUsername: 'Eden' } });
     if (!bot) return NextResponse.json({ error: 'No bot' });
     const password = decrypt(bot.karotterPasswordEnc);
     const client = new KarotterClient({ username: bot.karotterUsername, password });

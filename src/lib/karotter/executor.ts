@@ -432,10 +432,19 @@ async function executeNotifications(ctx: BotContext): Promise<void> {
           const unreadMessages = messages.filter((m: any) => !m.isRead && m.userId !== bot.karotterUsername);
           
           if (unreadMessages.length > 0) {
-            // 最も新しいメッセージを取得
-            const latestMsg = unreadMessages[0];
+            // 最も新しいメッセージを取得 (APIが古い順に返すため配列の最後を取得)
+            const latestMsg = unreadMessages[unreadMessages.length - 1];
             const cleanContent = latestMsg.content || '';
             const targetUsername = latestMsg.user?.username || latestMsg.userId || latestMsg.senderId || latestMsg.user_id || latestMsg.sender_id || latestMsg.authorId || latestMsg.author_id || 'unknown';
+            
+            // スレッドメモリから会話履歴を取得
+            const threadMem = bot.threadMemory as Record<string, { conversations?: string[]; lastMsgId?: string; features?: string }> || {};
+            const threadKey = `${targetUsername}_DM_${group.id}`;
+            
+            if (threadMem[threadKey]?.lastMsgId === String(latestMsg.id)) {
+              // 既に処理済みのメッセージは無視 (markAsReadが失敗している場合の重複防止)
+              continue;
+            }
             
             if (targetUsername === 'unknown') {
               actions.push(`DEBUG Message: ${JSON.stringify(latestMsg).slice(0, 150)}`);
@@ -447,9 +456,6 @@ async function executeNotifications(ctx: BotContext): Promise<void> {
             const effectiveSystemInst = dmSystemInst || systemInst;
 
             if (bot.postMode === 'AI') {
-              // スレッドメモリから会話履歴を取得
-              const threadMem = bot.threadMemory as Record<string, { conversations?: string[]; features?: string }> || {};
-              const threadKey = `${targetUsername}_DM_${group.id}`;
               const history = threadMem[threadKey]?.conversations?.join('\n') || '';
 
               const prompt = buildReplyPrompt(cleanContent, getTimeContext(), history, '', false, ctx.cloneContext);
@@ -482,7 +488,7 @@ async function executeNotifications(ctx: BotContext): Promise<void> {
                     const newHistory = [...(threadMem[threadKey]?.conversations || []), `相手: ${cleanContent}`, `あなた: ${replyText}`].slice(-20);
                     await prisma.bot.update({
                       where: { id: botId },
-                      data: { threadMemory: { ...threadMem, [threadKey]: { conversations: newHistory } } },
+                      data: { threadMemory: { ...threadMem, [threadKey]: { conversations: newHistory, lastMsgId: String(latestMsg.id) } } },
                     });
                   }
                 } catch (e) {

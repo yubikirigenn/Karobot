@@ -84,11 +84,11 @@ export function ActionSettingsPanel({ actionIntervals, setActionIntervals, react
 
                 {config.mode === 'FIXED_INTERVAL' && (
                   <div className="form-group">
-                    <label className="label">実行間隔（分）</label>
+                    <label className="label">実行間隔（分）※小数可。例：0.1分＝6秒</label>
                     <input 
-                      type="number" className="input-field" min="5"
-                      value={config.fixedIntervalMinutes || 60}
-                      onChange={e => updateInterval(type, 'fixedIntervalMinutes', Number(e.target.value))}
+                      type="number" className="input-field" min="0" step="0.1"
+                      value={config.fixedIntervalMinutes === undefined ? '' : config.fixedIntervalMinutes}
+                      onChange={e => updateInterval(type, 'fixedIntervalMinutes', e.target.value === '' ? '' : Number(e.target.value))}
                     />
                   </div>
                 )}
@@ -108,9 +108,9 @@ export function ActionSettingsPanel({ actionIntervals, setActionIntervals, react
                   <div className="form-group">
                     <label className="label">最短実行間隔（秒）</label>
                     <input 
-                      type="number" className="input-field" min="30"
-                      value={config.minInterval || 30}
-                      onChange={e => updateInterval(type, 'minInterval', Number(e.target.value))}
+                      type="number" className="input-field" min="0"
+                      value={config.minInterval === undefined ? '' : config.minInterval}
+                      onChange={e => updateInterval(type, 'minInterval', e.target.value === '' ? '' : Number(e.target.value))}
                     />
                   </div>
                 )}

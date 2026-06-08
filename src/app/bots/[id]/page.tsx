@@ -115,7 +115,7 @@ export default function BotDetailPage({ params }: { params: Promise<{ id: string
         dmReplyTemplates: dmReplyTemplates.filter(t => t.text.trim() !== '' || (t.mediaUrls && t.mediaUrls.length > 0)),
         autoPostMinInterval: Number(minInterval) || 30, autoPostPaceMultiplier: Number(paceMultiplier) || 4.7, autoPostMaxInterval: Number(maxInterval) || 3600,
         autoPostMode,
-        fixedIntervalMinutes: Math.max(5, Number(fixedIntervalMinutes) || 5),
+        fixedIntervalMinutes: Number(fixedIntervalMinutes) || 5,
         specificTimes,
         actionIntervals,
         reactionSettings,
@@ -623,13 +623,13 @@ export default function BotDetailPage({ params }: { params: Promise<{ id: string
               {autoPostMode === 'FIXED_INTERVAL' && (
                 <div style={{ borderTop: '1px solid var(--color-border)', paddingTop: '20px' }}>
                   <div className="form-group">
-                    <label className="label">投稿間隔（分）</label>
+                    <label className="label">投稿間隔（分）※小数可</label>
                     <div style={{ display: 'flex', alignItems: 'center', gap: '12px' }}>
-                      <input type="number" className="input-field" style={{ maxWidth: '120px' }}
-                        value={fixedIntervalMinutes} onChange={e => setFixedIntervalMinutes(e.target.value === '' ? '' : Number(e.target.value))} min={5} />
+                      <input type="number" className="input-field" style={{ maxWidth: '120px' }} step="0.1"
+                        value={fixedIntervalMinutes} onChange={e => setFixedIntervalMinutes(e.target.value === '' ? '' : Number(e.target.value))} />
                       <span className="text-muted">分ごとに投稿</span>
                     </div>
-                    <p className="label-hint">※システムの仕様上、最短は「5分間隔」となります。</p>
+                    <p className="label-hint">※自発投稿はシステム負荷のためなるべく5分以上を推奨します。</p>
                   </div>
                 </div>
               )}

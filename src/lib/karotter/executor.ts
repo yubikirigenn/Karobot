@@ -435,7 +435,7 @@ async function executeNotifications(ctx: BotContext): Promise<void> {
             // 最も新しいメッセージを取得
             const latestMsg = unreadMessages[0];
             const cleanContent = latestMsg.content || '';
-            const targetUsername = latestMsg.user?.username || 'unknown';
+            const targetUsername = latestMsg.user?.username || latestMsg.userId || latestMsg.senderId || 'unknown';
 
             if (targetUsername === bot.karotterUsername) continue; // 自身のメッセージは無視
 

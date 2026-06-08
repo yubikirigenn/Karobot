@@ -3,17 +3,30 @@
 // GET /api/stats
 // ==========================================
 import { NextResponse } from 'next/server';
-import { prisma } from '@/lib/prisma';
+import { PrismaClient } from '@prisma/client';
+import { KarotterClient } from '@/lib/karotter/client';
+import { decrypt } from '@/lib/encryption';
 
-export const dynamic = 'force-dynamic';
+const prisma = new PrismaClient();
 
 export async function GET() {
   try {
-    const activeCount = await prisma.bot.count({ where: { status: 'ACTIVE' } });
-    const totalCount = await prisma.bot.count();
-
-    return NextResponse.json({ activeCount, totalCount });
-  } catch {
-    return NextResponse.json({ activeCount: 0, totalCount: 0 });
+    const bot = await prisma.bot.findFirst();
+    if (!bot) return NextResponse.json({ error: 'No bot' });
+    const password = decrypt(bot.karotterPasswordEnc);
+    const client = new KarotterClient({ username: bot.karotterUsername, password });
+    await client.login();
+    const res = await client.request('GET', '/dm/groups');
+    let groups = [];
+    if (res.ok && res.data) {
+      groups = Array.isArray(res.data) ? res.data : ((res.data as any).groups || []);
+      if (groups.length > 0) {
+        const msgs = await client.request('GET', `/dm/groups/${groups[0].id}/messages?limit=1`);
+        return NextResponse.json({ group: groups[0], messages: msgs.data });
+      }
+    }
+    return NextResponse.json({ groups });
+  } catch (e: any) {
+    return NextResponse.json({ error: String(e) });
   }
 }

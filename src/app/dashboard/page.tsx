@@ -73,7 +73,6 @@ export default function DashboardPage() {
       case 'GROQ_QWEN': return 'Qwen(Groq)';
       case 'DEEPSEEK': return 'DeepSeek';
       case 'OPENAI_GPT': return 'GPT';
-      case 'OPENROUTER': return 'OpenRouter';
       default: return '';
     }
   };

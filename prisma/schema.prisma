@@ -167,7 +167,6 @@ enum AiProvider {
   GROQ_QWEN
   DEEPSEEK
   OPENAI_GPT
-  OPENROUTER
   NONE
 }
 

@@ -1,7 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server';
-import fs from 'fs/promises';
-import path from 'path';
 import { v4 as uuidv4 } from 'uuid';
+import { createServerSupabaseClient } from '@/lib/supabase';
 
 export async function POST(req: NextRequest) {
   try {
@@ -14,22 +13,27 @@ export async function POST(req: NextRequest) {
 
     const buffer = Buffer.from(await file.arrayBuffer());
     
-    // Create uploads directory if it doesn't exist
-    const uploadsDir = path.join(process.cwd(), 'public', 'uploads', 'bot_media');
-    await fs.mkdir(uploadsDir, { recursive: true });
-
     // Generate unique filename preserving extension
     const ext = file.name.substring(file.name.lastIndexOf('.'));
     const filename = `${uuidv4()}${ext}`;
-    const filepath = path.join(uploadsDir, filename);
 
-    // Save file
-    await fs.writeFile(filepath, buffer);
+    const supabase = createServerSupabaseClient();
+    const { data, error } = await supabase.storage
+      .from('bot_media')
+      .upload(filename, buffer, {
+        contentType: file.type,
+        upsert: false
+      });
 
-    // Return the URL path
-    const url = `/uploads/bot_media/${filename}`;
+    if (error) {
+      throw error;
+    }
 
-    return NextResponse.json({ url });
+    const { data: publicUrlData } = supabase.storage
+      .from('bot_media')
+      .getPublicUrl(filename);
+
+    return NextResponse.json({ url: publicUrlData.publicUrl });
   } catch (error) {
     console.error('Upload error:', error);
     return NextResponse.json({ error: 'Failed to upload file' }, { status: 500 });

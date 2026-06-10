@@ -45,23 +45,37 @@ export async function postKaroto(
     });
 
     for (const url of options.mediaUrls) {
-      if (url.startsWith('/uploads/')) {
-        const filePath = path.join(process.cwd(), 'public', url.replace(/\//g, path.sep));
-        try {
-          const buffer = await fs.readFile(filePath);
-          const ext = path.extname(filePath).toLowerCase();
-          let mimeType = 'image/jpeg';
-          if (ext === '.png') mimeType = 'image/png';
-          else if (ext === '.gif') mimeType = 'image/gif';
-          else if (ext === '.mp4') mimeType = 'video/mp4';
-          else if (ext === '.mov') mimeType = 'video/quicktime';
-          else if (ext === '.webp') mimeType = 'image/webp';
-          
-          const blob = new Blob([buffer], { type: mimeType });
-          formData.append('media', blob, path.basename(filePath));
-        } catch (err) {
-          console.error(`Failed to read media file ${filePath}`, err);
+      try {
+        let buffer: Buffer;
+        let filename: string;
+        let mimeType = 'image/jpeg';
+
+        if (url.startsWith('/uploads/')) {
+          const filePath = path.join(process.cwd(), 'public', url.replace(/\//g, path.sep));
+          buffer = await fs.readFile(filePath);
+          filename = path.basename(filePath);
+        } else if (url.startsWith('http')) {
+          const fetchRes = await fetch(url);
+          if (!fetchRes.ok) throw new Error(`Failed to fetch media: ${fetchRes.statusText}`);
+          const arrayBuffer = await fetchRes.arrayBuffer();
+          buffer = Buffer.from(arrayBuffer);
+          filename = url.split('/').pop() || 'media.jpg';
+          mimeType = fetchRes.headers.get('content-type') || mimeType;
+        } else {
+          continue;
         }
+
+        const ext = path.extname(filename).toLowerCase();
+        if (ext === '.png') mimeType = 'image/png';
+        else if (ext === '.gif') mimeType = 'image/gif';
+        else if (ext === '.mp4') mimeType = 'video/mp4';
+        else if (ext === '.mov') mimeType = 'video/quicktime';
+        else if (ext === '.webp') mimeType = 'image/webp';
+        
+        const blob = new Blob([buffer], { type: mimeType });
+        formData.append('media', blob, filename);
+      } catch (err) {
+        console.error(`Failed to read/fetch media ${url}`, err);
       }
     }
     finalBody = formData;

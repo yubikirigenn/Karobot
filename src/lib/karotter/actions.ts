@@ -46,19 +46,18 @@ export async function postKaroto(
 
     for (const url of options.mediaUrls) {
       try {
-        let buffer: Buffer;
+        let bufferData: Uint8Array | ArrayBuffer;
         let filename: string;
         let mimeType = 'image/jpeg';
 
         if (url.startsWith('/uploads/')) {
           const filePath = path.join(process.cwd(), 'public', url.replace(/\//g, path.sep));
-          buffer = await fs.readFile(filePath);
+          bufferData = new Uint8Array(await fs.readFile(filePath));
           filename = path.basename(filePath);
         } else if (url.startsWith('http')) {
           const fetchRes = await fetch(url);
           if (!fetchRes.ok) throw new Error(`Failed to fetch media: ${fetchRes.statusText}`);
-          const arrayBuffer = await fetchRes.arrayBuffer();
-          buffer = Buffer.from(arrayBuffer);
+          bufferData = await fetchRes.arrayBuffer();
           filename = url.split('/').pop() || 'media.jpg';
           mimeType = fetchRes.headers.get('content-type') || mimeType;
         } else {
@@ -72,7 +71,7 @@ export async function postKaroto(
         else if (ext === '.mov') mimeType = 'video/quicktime';
         else if (ext === '.webp') mimeType = 'image/webp';
         
-        const blob = new Blob([buffer], { type: mimeType });
+        const blob = new Blob([bufferData as any], { type: mimeType });
         formData.append('media', blob, filename);
       } catch (err) {
         console.error(`Failed to read/fetch media ${url}`, err);

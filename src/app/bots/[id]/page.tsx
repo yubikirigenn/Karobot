@@ -170,22 +170,31 @@ export default function BotDetailPage({ params }: { params: Promise<{ id: string
       });
       if (res.ok) {
         const { url } = await res.json();
-        
-        const updateState = (templates: TemplateObj[], setTemplates: any) => {
-          const newTemplates = [...templates];
-          if (!newTemplates[index].mediaUrls) newTemplates[index].mediaUrls = [];
-          newTemplates[index].mediaUrls!.push(url);
-          setTemplates(newTemplates);
+        const updateState = (setTemplates: React.Dispatch<React.SetStateAction<TemplateObj[]>>) => {
+          setTemplates(prev => {
+            const newTemplates = [...prev];
+            newTemplates[index] = { ...newTemplates[index] };
+            if (!newTemplates[index].mediaUrls) newTemplates[index].mediaUrls = [];
+            else newTemplates[index].mediaUrls = [...newTemplates[index].mediaUrls!];
+            newTemplates[index].mediaUrls.push(url);
+            return newTemplates;
+          });
         };
 
-        if (type === 'post') updateState(postTemplates, setPostTemplates);
-        else if (type === 'reply') updateState(replyTemplates, setReplyTemplates);
-        else if (type === 'mention') updateState(mentionReplyTemplates, setMentionReplyTemplates);
-        else updateState(dmReplyTemplates, setDmReplyTemplates);
+        if (type === 'post') updateState(setPostTemplates);
+        else if (type === 'reply') updateState(setReplyTemplates);
+        else if (type === 'mention') updateState(setMentionReplyTemplates);
+        else updateState(setDmReplyTemplates);
+      } else {
+        const errObj = await res.json().catch(() => ({}));
+        alert(`画像のアップロードに失敗しました: ${errObj.error || res.status}`);
       }
     } catch (err) {
       console.error('Upload failed', err);
+      alert('画像のアップロード通信エラーが発生しました');
     }
+    // reset input
+    e.target.value = '';
   };
 
   if (loading) {return (

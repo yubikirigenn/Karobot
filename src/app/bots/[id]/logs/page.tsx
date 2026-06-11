@@ -20,7 +20,7 @@ export default function BotLogsPage({ params }: { params: Promise<{ id: string }
   const fetchLogs = useCallback(async () => {
     setLoading(true);
     try {
-      const res = await fetch(`/api/bots/${id}/logs?limit=${limit}&offset=${offset}`);
+      const res = await fetch(`/api/bots/${id}/logs?limit=${limit}&offset=${offset}&_t=${Date.now()}`, { cache: 'no-store' });
       if (res.ok) {
         const data = await res.json();
         setLogs(data.logs);

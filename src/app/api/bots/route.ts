@@ -30,7 +30,12 @@ export async function GET() {
       orderBy: { createdAt: 'desc' },
     });
 
-    return NextResponse.json({ bots });
+    return NextResponse.json({ bots }, {
+      headers: {
+        'Cache-Control': 'no-store, no-cache, must-revalidate, max-age=0',
+        'Pragma': 'no-cache',
+      },
+    });
   } catch (e: any) {
     console.error("POST error:", e);
     if (e.message === 'Unauthorized') {

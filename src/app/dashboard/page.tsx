@@ -14,7 +14,7 @@ export default function DashboardPage() {
 
   const fetchBots = useCallback(async () => {
     try {
-      const res = await fetch('/api/bots');
+      const res = await fetch(`/api/bots?_t=${Date.now()}`, { cache: 'no-store' });
       if (res.ok) {
         const data = await res.json();
         setBots(data.bots);

@@ -6,7 +6,7 @@
 export type PostMode = 'AI' | 'FIXED_TEMPLATE' | 'RANDOM_TEMPLATE';
 
 // --- AIプロバイダー ---
-export type AiProviderType = 'GEMINI' | 'GROQ_QWEN' | 'DEEPSEEK' | 'OPENAI_GPT' | 'NONE';
+export type AiProviderType = 'GEMINI' | 'GROQ_QWEN' | 'DEEPSEEK' | 'OPENAI_GPT' | 'OPENROUTER' | 'NONE';
 
 // --- Bot稼働状態 ---
 export type BotStatus = 'ACTIVE' | 'PAUSED';

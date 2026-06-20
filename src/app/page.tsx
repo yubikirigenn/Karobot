@@ -5,13 +5,29 @@ import Link from 'next/link';
 
 export default function HomePage() {
   const [stats, setStats] = useState({ activeCount: 0, totalCount: 0 });
+  const [showModal, setShowModal] = useState(false);
 
   useEffect(() => {
     fetch('/api/stats')
       .then(res => res.json())
       .then(data => setStats(data))
       .catch(() => {});
+
+    // モーダルの表示判定
+    const hideModal = localStorage.getItem('hide-migration-modal');
+    if (hideModal !== 'true') {
+      setShowModal(true);
+    }
   }, []);
+
+  const handleCloseModal = () => {
+    setShowModal(false);
+  };
+
+  const handleDoNotShowAgain = () => {
+    localStorage.setItem('hide-migration-modal', 'true');
+    setShowModal(false);
+  };
 
   return (
     <div>
@@ -100,6 +116,34 @@ export default function HomePage() {
       <footer style={{ padding: '24px', textAlign: 'center', borderTop: '1px solid var(--color-border)' }}>
         <p className="text-sm text-muted">© 2026 KaroBot Manager — Karotter Bot管理サービス</p>
       </footer>
+
+      {/* Migration Alert Modal */}
+      {showModal && (
+        <div className="migration-modal-overlay">
+          <div className="migration-modal">
+            <h2 className="migration-modal-header">
+              ⚠️ データベース移行に伴うアカウント再開のお願い
+            </h2>
+            <div className="migration-modal-body">
+              <p>いつも KaroBot をご利用いただきありがとうございます。</p>
+              <p>この度、サービスのデータベース移行を行いました。以前からご利用のお客様は、以下の簡単な手順でこれまでの設定をそのまま引き継ぐことができます。</p>
+              <ul>
+                <li><strong>手順1:</strong> 以前と<strong>同じメールアドレス</strong>で再度「無料で始める（新規登録）」を行ってください。</li>
+                <li><strong>手順2:</strong> 登録が完了すると、過去の Bot 設定が自動的にアカウントに結びつき、これまで通りご利用いただけます。</li>
+              </ul>
+              <p>※セキュリティ上、以前のパスワードは引き継がれません。任意の新しいパスワードを設定してご登録ください。</p>
+            </div>
+            <div className="migration-modal-actions">
+              <button className="btn btn-secondary" onClick={handleDoNotShowAgain}>
+                二度と表示しない
+              </button>
+              <button className="btn btn-primary" onClick={handleCloseModal}>
+                閉じる
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   );
 }

@@ -39,11 +39,28 @@ export async function getCurrentUser() {
 
   if (!user) return null;
 
-  // Prisma の User レコードを取得 or 作成
+  // 1. まず現在の authId でユーザーを探す
   let dbUser = await prisma.user.findUnique({
     where: { authId: user.id },
   });
 
+  // 2. 見つからなかった場合、メールアドレスで既存ユーザーを検索
+  if (!dbUser && user.email) {
+    const existingUserByEmail = await prisma.user.findUnique({
+      where: { email: user.email },
+    });
+
+    if (existingUserByEmail) {
+      // 既存のユーザーが見つかった場合、新しい authId (UUID) に更新して紐付ける
+      dbUser = await prisma.user.update({
+        where: { id: existingUserByEmail.id },
+        data: { authId: user.id },
+      });
+      console.log(`[AUTH] Automatically linked existing user: ${user.email} with new authId ${user.id}`);
+    }
+  }
+
+  // 3. それでも見つからない（本当の新規ユーザー）場合のみ、作成する
   if (!dbUser) {
     dbUser = await prisma.user.create({
       data: {

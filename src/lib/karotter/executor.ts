@@ -45,10 +45,18 @@ export async function executeBotCycle(botId: string, forceAutoPost: boolean = fa
   const actions: string[] = [];
   const errors: string[] = [];
 
+  // 既読情報を過去3日間に制限
+  const threeDaysAgo = new Date(Date.now() - 3 * 24 * 60 * 60 * 1000);
+
   // Bot設定を取得
   const bot = await prisma.bot.findUnique({
     where: { id: botId },
-    include: { seenPosts: { select: { postId: true, type: true } } },
+    include: {
+      seenPosts: {
+        where: { createdAt: { gte: threeDaysAgo } },
+        select: { postId: true, type: true },
+      },
+    },
   });
 
   if (!bot) {
@@ -168,6 +176,27 @@ export async function executeBotCycle(botId: string, forceAutoPost: boolean = fa
       lastExecutedAt: new Date(),
     },
   });
+
+  // 古いデータの自動クリーンアップ（5%の確率でバックグラウンド実行）
+  if (Math.random() < 0.05) {
+    const cleanSeenDaysAgo = new Date(Date.now() - 3 * 24 * 60 * 60 * 1000);
+    const cleanLogDaysAgo = new Date(Date.now() - 7 * 24 * 60 * 60 * 1000);
+
+    // 非同期で実行し、全体のレスポンスをブロックしない
+    prisma.seenPost.deleteMany({
+      where: {
+        botId,
+        createdAt: { lt: cleanSeenDaysAgo },
+      },
+    }).catch(e => console.error('[CLEANUP] seenPost delete failed:', e));
+
+    prisma.botLog.deleteMany({
+      where: {
+        botId,
+        createdAt: { lt: cleanLogDaysAgo },
+      },
+    }).catch(e => console.error('[CLEANUP] botLog delete failed:', e));
+  }
 
   return { actions, errors };
 }

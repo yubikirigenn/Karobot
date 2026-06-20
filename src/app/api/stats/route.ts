@@ -9,7 +9,8 @@ export async function GET() {
     const totalCount = await prisma.bot.count();
 
     return NextResponse.json({ activeCount, totalCount });
-  } catch {
+  } catch (error) {
+    console.error("Stats API Error:", error);
     return NextResponse.json({ activeCount: 0, totalCount: 0 });
   }
 }

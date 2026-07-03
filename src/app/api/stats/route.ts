@@ -1,12 +1,12 @@
 import { NextResponse } from 'next/server';
-import { store } from '@/lib/botStateStore';
+import { prisma } from '@/lib/prisma';
 
 export const dynamic = 'force-dynamic';
 
 export async function GET() {
   try {
-    const activeCount = store.getActiveCount();
-    const totalCount = store.getTotalCount();
+    const activeCount = await prisma.bot.count({ where: { status: 'ACTIVE' } });
+    const totalCount = await prisma.bot.count();
 
     return NextResponse.json({ activeCount, totalCount });
   } catch (error) {

@@ -16,8 +16,20 @@ export async function GET() {
   try {
     const user = await requireAuth();
 
-    // メモリ上のストアから取得 (DBアクセス排除)
-    const bots = store.getBotsForUser(user.id);
+    const bots = await prisma.bot.findMany({
+      where: { userId: user.id },
+      select: {
+        id: true,
+        name: true,
+        karotterUsername: true,
+        postMode: true,
+        aiProvider: true,
+        status: true,
+        lastExecutedAt: true,
+        createdAt: true,
+      },
+      orderBy: { createdAt: 'desc' },
+    });
 
     return NextResponse.json({ bots }, {
       headers: {

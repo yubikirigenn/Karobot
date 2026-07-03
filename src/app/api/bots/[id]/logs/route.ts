@@ -5,7 +5,6 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { requireAuth } from '@/lib/auth';
 import { prisma } from '@/lib/prisma';
-import { store } from '@/lib/botStateStore';
 
 export async function GET(
   request: NextRequest,
@@ -24,23 +23,11 @@ export async function GET(
     const limit = Math.min(parseInt(searchParams.get('limit') || '50'), 100);
     const offset = parseInt(searchParams.get('offset') || '0');
 
-    // まだDBに同期されていないメモリ上の最新ログを取得
-    const pendingLogs = store.getRecentLogs(id);
-    const formattedPending = pendingLogs.map((pl, idx) => ({
-      id: `pending-${idx}-${pl.createdAt.getTime()}`,
-      action: pl.action,
-      detail: pl.detail,
-      targetPostId: pl.targetPostId,
-      resultPostId: pl.resultPostId,
-      success: pl.success,
-      createdAt: pl.createdAt,
-    }));
-
-    // DB からログを取得
-    const dbLogs = await prisma.botLog.findMany({
+    const logs = await prisma.botLog.findMany({
       where: { botId: id },
       orderBy: { createdAt: 'desc' },
-      take: limit + offset, // 結合後にオフセットとリミットでスライスするため十分な量を取得
+      take: limit,
+      skip: offset,
       select: {
         id: true,
         action: true,
@@ -52,14 +39,9 @@ export async function GET(
       },
     });
 
-    const mergedLogs = [...formattedPending, ...dbLogs]
-      .sort((a, b) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime());
+    const total = await prisma.botLog.count({ where: { botId: id } });
 
-    const paginatedLogs = mergedLogs.slice(offset, offset + limit);
-    const dbTotal = await prisma.botLog.count({ where: { botId: id } });
-    const total = dbTotal + formattedPending.length;
-
-    return NextResponse.json({ logs: paginatedLogs, total });
+    return NextResponse.json({ logs, total });
   } catch {
     return NextResponse.json({ error: '認証が必要です' }, { status: 401 });
   }

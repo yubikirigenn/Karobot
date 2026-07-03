@@ -24,6 +24,23 @@ function createPrismaClient() {
   } catch (e) {
     const errorMsg = e instanceof Error ? e.message : String(e);
     console.error('[PrismaInit] Failed to parse DATABASE_URL as URL object:', errorMsg);
+    
+    // 安全に文字列の構造を解析（パスワード漏洩を防ぎつつ、パース失敗原因を特定）
+    try {
+      const isQuoted = connectionString.startsWith('"') || connectionString.startsWith("'") || connectionString.endsWith('"') || connectionString.endsWith("'");
+      const hasSpace = connectionString.includes(' ') || connectionString.includes('\r') || connectionString.includes('\n');
+      const length = connectionString.length;
+      const prefix = connectionString.slice(0, 25);
+      const suffix = connectionString.slice(-25);
+      const atCount = (connectionString.match(/@/g) || []).length;
+      const colonCount = (connectionString.match(/:/g) || []).length;
+      const percentCount = (connectionString.match(/%/g) || []).length;
+      console.log(`[PrismaInitDebug] Length: ${length}, Quoted: ${isQuoted}, HasSpace: ${hasSpace}`);
+      console.log(`[PrismaInitDebug] Starts: ${prefix}, Ends: ${suffix}`);
+      console.log(`[PrismaInitDebug] Counts - @: ${atCount}, :: ${colonCount}, %: ${percentCount}`);
+    } catch (debugErr) {
+      console.error('[PrismaInitDebug] Failed to analyze string:', debugErr);
+    }
   }
 
   // pgのPoolを使用し、接続文字列のデコードとSSLオプションを明示的に渡す

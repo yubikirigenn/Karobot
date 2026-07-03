@@ -5,6 +5,7 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { requireAuth } from '@/lib/auth';
 import { prisma } from '@/lib/prisma';
+import { store } from '@/lib/botStateStore';
 
 export async function POST(
   _request: NextRequest,
@@ -26,6 +27,9 @@ export async function POST(
       data: { status: newStatus },
       select: { id: true, status: true },
     });
+
+    // メモリ上のストアにも即時反映
+    store.updateBotFields(id, { status: newStatus }, false);
 
     return NextResponse.json({ bot: updated });
   } catch (e) {

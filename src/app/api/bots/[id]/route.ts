@@ -9,6 +9,7 @@ import { requireAuth } from '@/lib/auth';
 import { prisma } from '@/lib/prisma';
 import { encrypt, decrypt } from '@/lib/encryption';
 import { KarotterClient } from '@/lib/karotter/client';
+import { store } from '@/lib/botStateStore';
 
 export const dynamic = 'force-dynamic';
 
@@ -122,6 +123,12 @@ export async function PUT(
       },
     });
 
+    // 最新状態をDBから取得してメモリに反映
+    const fullUpdated = await prisma.bot.findUnique({ where: { id } });
+    if (fullUpdated) {
+      store.addBotToStore(fullUpdated);
+    }
+
     return NextResponse.json({ bot: updated });
   } catch (e) {
     if (e instanceof Error && e.message === 'Unauthorized') {
@@ -144,6 +151,8 @@ export async function DELETE(
     }
 
     await prisma.bot.delete({ where: { id } });
+    // メモリ上のストアから削除
+    store.removeBotFromStore(id);
     return NextResponse.json({ success: true });
   } catch (e) {
     if (e instanceof Error && e.message === 'Unauthorized') {

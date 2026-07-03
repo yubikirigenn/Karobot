@@ -3,18 +3,29 @@
 // ==========================================
 import { PrismaClient } from '@prisma/client';
 import { PrismaPg } from '@prisma/adapter-pg';
+import { Pool } from 'pg';
 
 const globalForPrisma = globalThis as unknown as {
   prisma: PrismaClient | undefined;
 };
 
 function createPrismaClient() {
-  const connectionString = process.env.DATABASE_URL || 'postgres://dummy:dummy@localhost:5432/dummy';
-  if (!process.env.DATABASE_URL) {
-    console.warn('DATABASE_URL is not set. Using dummy connection string for build time.');
+  const connectionString = process.env.DATABASE_URL;
+  if (!connectionString) {
+    console.warn('DATABASE_URL is not set. Using dummy client for build.');
+    return new PrismaClient();
   }
 
-  const adapter = new PrismaPg(connectionString);
+  // pgのPoolを使用し、接続文字列のデコードとSSLオプションを明示的に渡す
+  const pool = new Pool({
+    connectionString: decodeURIComponent(connectionString),
+    ssl: { rejectUnauthorized: false },
+    max: 10,
+    idleTimeoutMillis: 30000,
+    connectionTimeoutMillis: 10000,
+  });
+
+  const adapter = new PrismaPg(pool);
   return new PrismaClient({ adapter });
 }
 

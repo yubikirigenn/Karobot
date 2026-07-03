@@ -4,8 +4,8 @@
 // cron-job.org から定期的に呼ばれる
 // ==========================================
 import { NextRequest, NextResponse } from 'next/server';
-import { prisma } from '@/lib/prisma';
 import { executeBotCycle } from '@/lib/karotter/executor';
+import { store } from '@/lib/botStateStore';
 
 export const dynamic = 'force-dynamic';
 
@@ -20,11 +20,8 @@ export async function POST(request: NextRequest) {
   }
 
   try {
-    // 全てのACTIVEなBotを取得
-    const activeBots = await prisma.bot.findMany({
-      where: { status: 'ACTIVE' },
-      select: { id: true, name: true },
-    });
+    // 全てのACTIVEなBotを取得（メモリからロード）
+    const activeBots = store.getAllActiveBots();
 
     const results = [];
 

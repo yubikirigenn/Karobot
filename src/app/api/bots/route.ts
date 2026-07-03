@@ -8,6 +8,7 @@ import { requireAuth } from '@/lib/auth';
 import { prisma } from '@/lib/prisma';
 import { encrypt } from '@/lib/encryption';
 import { KarotterClient } from '@/lib/karotter/client';
+import { store } from '@/lib/botStateStore';
 
 export const dynamic = 'force-dynamic';
 
@@ -15,20 +16,8 @@ export async function GET() {
   try {
     const user = await requireAuth();
 
-    const bots = await prisma.bot.findMany({
-      where: { userId: user.id },
-      select: {
-        id: true,
-        name: true,
-        karotterUsername: true,
-        postMode: true,
-        aiProvider: true,
-        status: true,
-        lastExecutedAt: true,
-        createdAt: true,
-      },
-      orderBy: { createdAt: 'desc' },
-    });
+    // メモリ上のストアから取得 (DBアクセス排除)
+    const bots = store.getBotsForUser(user.id);
 
     return NextResponse.json({ bots }, {
       headers: {
@@ -37,7 +26,7 @@ export async function GET() {
       },
     });
   } catch (e: any) {
-    console.error("POST error:", e);
+    console.error("GET error:", e);
     if (e.message === 'Unauthorized') {
       return NextResponse.json({ error: '認証が必要です' }, { status: 401 });
     }
@@ -113,6 +102,12 @@ export async function POST(request: NextRequest) {
         createdAt: true,
       },
     });
+
+    // 最新状態をDBから取得してメモリに追加
+    const fullBot = await prisma.bot.findUnique({ where: { id: bot.id } });
+    if (fullBot) {
+      store.addBotToStore(fullBot);
+    }
 
     return NextResponse.json({ bot }, { status: 201 });
   } catch (e) {

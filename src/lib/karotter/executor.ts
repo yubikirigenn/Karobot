@@ -5,7 +5,6 @@
 //   Phase 2: 通知処理（メンション反応含む）
 //   Phase 3: ランダムアクション
 // ==========================================
-import { prisma } from '@/lib/prisma';
 import { decrypt } from '@/lib/encryption';
 import { KarotterClient } from './client';
 import { postKaroto, likePost, rekarotPost, reactPost, followUser, getDmGroups, getDmMessages, markDmAsRead, sendDm } from './actions';
@@ -19,10 +18,11 @@ import {
   getTimeContext, extractKnowledgeAndClean
 } from '@/lib/ai/prompts';
 import type { BotFeatures, Probabilities, TemplateObj } from '@/types';
+import { store } from '../botStateStore';
 
 // --- 共通コンテキスト（フェーズ間で共有） ---
 interface BotContext {
-  bot: Awaited<ReturnType<typeof prisma.bot.findUnique>> & Record<string, unknown>;
+  bot: Record<string, any>;
   client: KarotterClient;
   provider: AiProvider;
   features: BotFeatures;
@@ -45,19 +45,8 @@ export async function executeBotCycle(botId: string, forceAutoPost: boolean = fa
   const actions: string[] = [];
   const errors: string[] = [];
 
-  // 既読情報を過去3日間に制限
-  const threeDaysAgo = new Date(Date.now() - 3 * 24 * 60 * 60 * 1000);
-
-  // Bot設定を取得
-  const bot = await prisma.bot.findUnique({
-    where: { id: botId },
-    include: {
-      seenPosts: {
-        where: { createdAt: { gte: threeDaysAgo } },
-        select: { postId: true, type: true },
-      },
-    },
-  });
+  // Bot設定をインメモリから取得
+  const bot = store.getBotData(botId);
 
   if (!bot) {
     errors.push('Botが見つかりません');
@@ -84,14 +73,14 @@ export async function executeBotCycle(botId: string, forceAutoPost: boolean = fa
   if (!bot.accessToken) {
     try {
       const token = await client.login();
-      await prisma.bot.update({
-        where: { id: botId },
-        data: { accessToken: token, tokenExpiresAt: new Date(Date.now() + 300000) },
+      store.updateBotFields(botId, {
+        accessToken: token,
+        tokenExpiresAt: new Date(Date.now() + 300000),
       });
     } catch (e) {
       const errorMsg = e instanceof Error ? e.message : String(e);
       errors.push(`Karotterログインに失敗しました: ${errorMsg}`);
-      await logAction(botId, 'ERROR', `ログイン失敗: ${errorMsg}`, false);
+      store.addLog(botId, 'ERROR', `ログイン失敗: ${errorMsg}`, false);
       return { actions, errors };
     }
   }
@@ -115,9 +104,8 @@ export async function executeBotCycle(botId: string, forceAutoPost: boolean = fa
     }
   );
 
-  // 既読IDセットを構築
-  const seenIds = new Set(bot.seenPosts.filter(s => s.type === 'SEEN').map(s => s.postId));
-  const aiPostedIds = new Set(bot.seenPosts.filter(s => s.type === 'AI_POSTED').map(s => s.postId));
+  // 既読IDセットをインメモリから構築
+  const { seenIds, aiPostedIds } = store.getSeenPostSets(botId);
 
   const systemInst = bot.systemInstruction || '';
   const mentionSystemInst = (bot as Record<string, unknown>).mentionSystemInstruction as string || '';
@@ -168,34 +156,15 @@ export async function executeBotCycle(botId: string, forceAutoPost: boolean = fa
   // === Phase 3: アクション実行（スケジュール/確率） ===
   await executeRandomActions(ctx, didAutoPost);
 
-  // トークンをキャッシュ更新
-  await prisma.bot.update({
-    where: { id: botId },
-    data: {
-      accessToken: client.getAccessToken(),
-      lastExecutedAt: new Date(),
-    },
+  // トークンをインメモリでキャッシュ更新
+  store.updateBotFields(botId, {
+    accessToken: client.getAccessToken(),
+    lastExecutedAt: new Date(),
   });
 
-  // 古いデータの自動クリーンアップ（5%の確率でバックグラウンド実行）
+  // 古いデータの自動クリーンアップ（インメモリ側のみ、5%の確率で実行）
   if (Math.random() < 0.05) {
-    const cleanSeenDaysAgo = new Date(Date.now() - 3 * 24 * 60 * 60 * 1000);
-    const cleanLogDaysAgo = new Date(Date.now() - 7 * 24 * 60 * 60 * 1000);
-
-    // 非同期で実行し、全体のレスポンスをブロックしない
-    prisma.seenPost.deleteMany({
-      where: {
-        botId,
-        createdAt: { lt: cleanSeenDaysAgo },
-      },
-    }).catch(e => console.error('[CLEANUP] seenPost delete failed:', e));
-
-    prisma.botLog.deleteMany({
-      where: {
-        botId,
-        createdAt: { lt: cleanLogDaysAgo },
-      },
-    }).catch(e => console.error('[CLEANUP] botLog delete failed:', e));
+    store.cleanupOldSeenPosts();
   }
 
   return { actions, errors };
@@ -288,10 +257,7 @@ async function executeAutoPost(ctx: BotContext, forceAutoPost: boolean): Promise
       }
     }
 
-    await prisma.bot.update({
-      where: { id: botId },
-      data: { lastAutoPostAt: new Date() },
-    });
+    store.updateBotFields(botId, { lastAutoPostAt: new Date() });
 
     return true;
   } catch (e) {
@@ -522,9 +488,8 @@ async function executeNotifications(ctx: BotContext): Promise<void> {
                     
                     // 会話履歴を更新
                     const newHistory = [...(threadMem[threadKey]?.conversations || []), `相手: ${cleanContent}`, `あなた: ${replyText}`].slice(-20);
-                    await prisma.bot.update({
-                      where: { id: botId },
-                      data: { threadMemory: { ...threadMem, [threadKey]: { conversations: newHistory, lastMsgId: String(latestMsg.id) } } },
+                    store.updateBotFields(botId, {
+                      threadMemory: { ...threadMem, [threadKey]: { conversations: newHistory, lastMsgId: String(latestMsg.id) } }
                     });
                   }
                 } catch (e) {
@@ -770,7 +735,7 @@ async function executeRandomActions(ctx: BotContext, didAutoPost: boolean): Prom
     }
 
     if (statesUpdated) {
-      await prisma.bot.update({ where: { id: botId }, data: { actionStates: newActionStates } });
+      store.updateBotFields(botId, { actionStates: newActionStates });
     }
   } catch (e) {
     errors.push(`ランダムアクションエラー: ${e}`);
@@ -778,39 +743,27 @@ async function executeRandomActions(ctx: BotContext, didAutoPost: boolean): Prom
 }
 
 // --- ヘルパー関数 ---
-async function markSeen(botId: string, postId: string, type: 'SEEN' | 'AI_POSTED') {
-  try {
-    await prisma.seenPost.upsert({
-      where: { botId_postId: { botId, postId } },
-      update: { type },
-      create: { botId, postId, type },
-    });
-  } catch { /* duplicate ok */ }
+function markSeen(botId: string, postId: string, type: 'SEEN' | 'AI_POSTED') {
+  store.markSeen(botId, postId, type);
 }
 
-async function logAction(botId: string, action: string, detail: string, success: boolean, targetPostId?: string, resultPostId?: string) {
-  try {
-    await prisma.botLog.create({
-      data: { botId, action, detail, success, targetPostId: targetPostId || null, resultPostId: resultPostId || null },
-    });
-  } catch (e) {
-    console.error(`ログ記録エラー: ${e}`);
-  }
+function logAction(botId: string, action: string, detail: string, success: boolean, targetPostId?: string, resultPostId?: string) {
+  store.addLog(botId, action, detail, success, targetPostId || null, resultPostId || null);
 }
 
-async function updateRecentPosts(botId: string, text: string) {
-  const bot = await prisma.bot.findUnique({ where: { id: botId }, select: { recentPosts: true } });
+function updateRecentPosts(botId: string, text: string) {
+  const bot = store.getBotData(botId);
   const posts = ((bot?.recentPosts as string[]) || []);
   posts.push(text.replace(/\n/g, ' '));
   const trimmed = posts.slice(-10);
-  await prisma.bot.update({ where: { id: botId }, data: { recentPosts: trimmed } });
+  store.updateBotFields(botId, { recentPosts: trimmed });
 }
 
-async function updateKnowledge(botId: string, knowledge: string) {
-  const bot = await prisma.bot.findUnique({ where: { id: botId }, select: { botKnowledge: true } });
+function updateKnowledge(botId: string, knowledge: string) {
+  const bot = store.getBotData(botId);
   const list = ((bot?.botKnowledge as string[]) || []);
   list.push(knowledge);
   const trimmed = list.slice(-15);
-  await prisma.bot.update({ where: { id: botId }, data: { botKnowledge: trimmed } });
+  store.updateBotFields(botId, { botKnowledge: trimmed });
   console.log(`💡 AIが新しい知識を学習: ${knowledge}`);
 }
